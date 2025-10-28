@@ -1,6 +1,5 @@
 # Artifex AI v2.0
 
-![Logo Artifex AI](https://i.imgur.com/kvJSt3g.png)
 
 **Artifex AI je moderní aplikace pro úpravu a analýzu fotografií poháněná umělou inteligencí, určená pro fotografy všech úrovní. Kombinuje výkonné schopnosti AI s komplexní sadou nástrojů pro manuální úpravy, vše zabaleno do elegantního, responzivního a uživatelsky přívětivého rozhraní.**
 
