@@ -10,14 +10,14 @@
 ### 1. Elegantní a responzivní uživatelské rozhraní
 Krásné a intuitivní rozhraní, které bezproblémově funguje na všech zařízeních. Zahrnuje ohromující tmavý režim pro pohodlné úpravy za jakýchkoli světelných podmínek.
 
-*Snímek obrazovky hlavního rozhraní Artifex AI.*
+
 
 
 
 ### 2. Snadné nahrávání fotografií
 Snadno nahrajte své fotografie pomocí jednoduchého rozhraní drag-and-drop nebo výběrem souborů ze svého zařízení. Aplikace podporuje více formátů obrázků, včetně JPG, PNG, RAW a TIFF.
 
-*Snímek obrazovky nahrávací obrazovky.*
+
 
 
 
@@ -27,15 +27,13 @@ Využijte sílu Google Gemini API k získání podrobné analýzy vašich fotogr
 - Tři konkrétní návrhy na vylepšení (např. kompozice, osvětlení).
 - Odhadované technické detaily jako ISO, clona a rychlost závěrky.
 
-*Snímek obrazovky panelu AI analýzy s výsledky.*
+
 
 
 
 ### 4. Autopilot AI vylepšení
 Jediným kliknutím nechte AI automaticky vylepšit vaši fotografii. Autopilot inteligentně upravuje jas, kontrast a vyvážení barev, aby vytvořil profesionálně upravený výsledek.
 
-*Srovnání "před a po" obrázku s použitím Autopilota.*
-![Srovnání s Autopilot AI](https://via.placeholder.com/600x300.png?text=Srovnání+před+a+po+Autopilotu)
 
 ### 5. Komplexní sada pro manuální úpravy
 Pro ty, kteří preferují jemné ovládání, nabízí panel pro manuální úpravy řadu nastavení:
@@ -43,20 +41,16 @@ Pro ty, kteří preferují jemné ovládání, nabízí panel pro manuální úp
 - **Úpravy:** Posuvníky pro jas, kontrast, sytost a ostrost.
 - **Živý náhled:** Sledujte své změny v reálném čase před jejich použitím.
 
-*Snímek obrazovky panelu pro manuální úpravy s posuvníky.*
-![Panel manuálních úprav](https://via.placeholder.com/600x300.png?text=Panel+s+nástroji+pro+manuální+úpravy)
+
 
 ### 6. Výkonné hromadné zpracování
 Ušetřete čas použitím úprav na více obrázků najednou. Aktuálně podporuje hromadné oříznutí na vybraný poměr stran pro všechny nahrané fotografie.
 
-*Snímek obrazovky pohledu pro hromadné zpracování.*
-![Hromadné zpracování](https://via.placeholder.com/600x300.png?text=Náhled+hromadného+zpracování)
+
 
 ### 7. Plná historie Zpět/Vpřed
 Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii vašich úprav. Použijte standardní klávesové zkratky (`Ctrl+Z` pro zpět, `Ctrl+Y` pro vpřed) k navigaci mezi změnami.
 
-*Historie úprav je přístupná pomocí klávesových zkratek.*
-![Historie úprav](https://via.placeholder.com/600x300.png?text=Historie+úprav+dostupná+přes+Ctrl+Z/Y)
 
 ---
 
