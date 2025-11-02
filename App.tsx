@@ -1,16 +1,18 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import UploadView from './components/UploadView';
 import EditorView from './components/EditorView';
 import BatchView from './components/BatchView';
+import GenerateImageView from './components/GenerateImageView';
 import { MenuIcon, MoonIcon, SunIcon, KeyIcon } from './components/icons';
 import type { UploadedFile } from './types';
 import { isApiKeySet } from './utils/apiKey';
 import ApiKeyModal from './components/ApiKeyModal';
 
 type Theme = 'light' | 'dark';
-type View = 'upload' | 'editor' | 'batch';
+type View = 'upload' | 'editor' | 'batch' | 'generate-image';
 export type EditorAction = { action: string; timestamp: number } | null;
 
 interface History {
@@ -133,6 +135,20 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const handleImageGenerated = useCallback((file: File) => {
+    const newFile: UploadedFile = {
+        id: `${file.name}-${file.lastModified}-${Math.random()}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+    };
+    setHistory(h => ({
+        past: [...h.past, h.present],
+        present: [...h.present, newFile],
+        future: [],
+    }));
+    setCurrentView('editor');
+  }, []);
+
   const handleNavigation = useCallback((payload: { view: View; action?: string }) => {
     const { view, action } = payload;
     if (view === 'upload') {
@@ -143,6 +159,11 @@ const App: React.FC = () => {
         });
         return { past: [], present: [], future: [] };
       });
+    }
+    
+    if (view === 'generate-image') {
+        setCurrentView('generate-image');
+        return;
     }
     
     if ((view === 'editor' || view === 'batch') && uploadedFiles.length === 0) {
@@ -187,6 +208,8 @@ const App: React.FC = () => {
                 />;
       case 'batch':
         return <BatchView files={uploadedFiles} onProcessingComplete={handleProcessingComplete} />;
+      case 'generate-image':
+        return <GenerateImageView isApiKeyAvailable={isApiKeyAvailable} onImageGenerated={handleImageGenerated} />;
       case 'upload':
       default:
         return <UploadView onFilesSelected={handleFileSelection} />;
@@ -197,6 +220,7 @@ const App: React.FC = () => {
     upload: 'Nahrát fotografie',
     editor: 'Editor & AI Analýza',
     batch: 'Hromadné zpracování',
+    'generate-image': 'Generování obrázků AI',
   };
 
   return (

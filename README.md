@@ -82,7 +82,6 @@ Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii v
     ```bash
     npm run dev
     ```
-
 5.  Otevřete prohlížeč a přejděte na zobrazenou lokální adresu serveru.
 
 ---
@@ -94,15 +93,3 @@ Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii v
 -   Pokročilejší nástroje pro manuální úpravy (křivky, selektivní úpravy).
 -   Možnosti exportu s různým nastavením kvality.
 -   AI odstranění objektů nebo výměna pozadí.
-
-
-## Fotky z aplikace 
-
-
-<img width="1875" height="804" alt="Snímek obrazovky 2025-10-28 204542" src="https://github.com/user-attachments/assets/d04624db-57b3-4af7-845c-eb8cd8f93877" />
-<img width="1828" height="718" alt="Snímek obrazovky 2025-10-28 204556" src="https://github.com/user-attachments/assets/c7457686-6a33-40c6-96d4-2d8d3097d3d1" />
-<img width="1912" height="875" alt="Snímek obrazovky 2025-10-28 204619" src="https://github.com/user-attachments/assets/74c93fea-60aa-4e1b-bd9f-729d6f688d0c" />
-<img width="1675" height="875" alt="Snímek obrazovky 2025-10-28 204937" src="https://github.com/user-attachments/assets/2a95818a-94b7-42ef-a08f-26276c2c4d32" />
-<img width="1235" height="715" alt="Snímek obrazovky 2025-10-28 203612" src="https://github.com/user-attachments/assets/afcd37b4-096f-40aa-b14d-bd3390f6db6f" />
-
-

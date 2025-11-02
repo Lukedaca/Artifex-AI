@@ -30,6 +30,16 @@ export interface ManualEdits {
     brightness: number;
     contrast: number;
     saturation: number;
-    sharpness: number;
+    vibrance: number;
+    shadows: number;
+    highlights: number;
+    clarity: number;
     crop?: number;
+}
+
+export interface CropCoordinates {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }

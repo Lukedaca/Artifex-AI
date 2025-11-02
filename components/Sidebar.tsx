@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   UploadIcon,
@@ -5,6 +6,8 @@ import {
   ManualEditIcon,
   BatchIcon,
   AutopilotIcon,
+  AutoCropIcon,
+  GenerateImageIcon,
   ExportIcon,
   HistoryIcon,
   LogoIcon,
@@ -36,6 +39,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavig
 
   const aiTools = [
     { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
+    { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
+    { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Generování obrázků", view: "generate-image" },
     { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor" },
     { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor" },
   ];
