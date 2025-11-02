@@ -1,5 +1,6 @@
 
 import React from 'react';
+import type { EditorAction } from '../App';
 import {
   UploadIcon,
   AnalysisIcon,
@@ -20,16 +21,27 @@ interface SidebarProps {
   onClose: () => void;
   onNavigate: (payload: { view: string; action?: string }) => void;
   onToggleCollapse: () => void;
+  currentView: string;
+  activeAction: EditorAction;
 }
 
-const NavItem = ({ icon, label, onClick, isCollapsed }: { icon: React.ReactNode; label: string; onClick: () => void; isCollapsed: boolean; }) => (
-  <button onClick={onClick} className={`w-full flex items-center text-sm font-medium text-slate-600 dark:text-slate-300 rounded-lg hover:bg-sky-500/10 hover:text-sky-600 dark:hover:bg-sky-500/10 dark:hover:text-sky-400 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-3 px-3 py-2.5'}`} title={isCollapsed ? label : undefined}>
+interface NavItemProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  isCollapsed: boolean;
+  isActive: boolean;
+}
+
+// FIX: Explicitly typed NavItem as a React.FC to allow the 'key' prop required for list rendering.
+const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
+  <button onClick={onClick} className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-sky-500/10 hover:text-sky-600 dark:hover:bg-sky-500/10 dark:hover:text-sky-400 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-3 px-3 py-2.5'} ${isActive ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-300'}`} title={isCollapsed ? label : undefined}>
     {icon}
     {!isCollapsed && <span>{label}</span>}
   </button>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, currentView, activeAction }) => {
   const mainTools = [
     { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: "Nahrát fotky", view: "upload" },
     { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: "AI Analýza", view: "editor", action: "analysis" },
@@ -73,18 +85,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavig
               {!isCollapsed && <h2 className="px-3 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">Hlavní nástroje</h2>}
               {isCollapsed && <hr className="mb-4 border-slate-200 dark:border-slate-700" />}
               <div className="space-y-1">
-                {mainTools.map((item) => (
-                  <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} />
-                ))}
+                {mainTools.map((item) => {
+                  const isActive = item.view === currentView && item.action === (activeAction ? activeAction.action : undefined);
+                  return (
+                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
+                  );
+                })}
               </div>
             </div>
             <div>
               {!isCollapsed && <h2 className="px-3 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">AI nástroje</h2>}
               {isCollapsed && <hr className="my-4 border-slate-200 dark:border-slate-700" />}
               <div className="space-y-1">
-                {aiTools.map((item) => (
-                  <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} />
-                ))}
+                {aiTools.map((item) => {
+                  const isActive = item.view === currentView && item.action === (activeAction ? activeAction.action : undefined);
+                  return (
+                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
+                  );
+                })}
               </div>
             </div>
           </nav>

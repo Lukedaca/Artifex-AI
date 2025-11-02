@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef } from 'react';
 import { UploadIcon } from './icons';
 
@@ -31,7 +32,8 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const acceptedFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+      // FIX: Explicitly type 'file' as File to resolve 'unknown' type error.
+      const acceptedFiles = Array.from(e.dataTransfer.files).filter((file: File) => file.type.startsWith('image/'));
       if (acceptedFiles.length > 0) {
         onFilesSelected(acceptedFiles);
       }
@@ -41,7 +43,8 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
   
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const acceptedFiles = Array.from(e.target.files).filter(file => file.type.startsWith('image/'));
+      // FIX: Explicitly type 'file' as File to resolve 'unknown' type error.
+      const acceptedFiles = Array.from(e.target.files).filter((file: File) => file.type.startsWith('image/'));
       if (acceptedFiles.length > 0) {
         onFilesSelected(acceptedFiles);
       }

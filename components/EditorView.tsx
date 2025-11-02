@@ -114,6 +114,10 @@ const EditorView: React.FC<EditorViewProps> = ({ files, isApiKeyAvailable, activ
     const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
     const [activePanel, setActivePanel] = useState<string | null>(null);
     const prevFileCount = useRef(files.length);
+    const [imageState, setImageState] = useState<{ urls: [string | null, string | null], activeIndex: number }>({
+        urls: [null, null],
+        activeIndex: 0,
+    });
 
     useEffect(() => {
         if (files.length > prevFileCount.current) {
@@ -136,6 +140,45 @@ const EditorView: React.FC<EditorViewProps> = ({ files, isApiKeyAvailable, activ
 
     const selectedFile = useMemo(() => files.find(f => f.id === selectedFileId), [files, selectedFileId]);
 
+    useEffect(() => {
+        if (selectedFile) {
+            const currentActiveUrl = imageState.urls[imageState.activeIndex];
+            
+            // Initial load case: if no image is displayed yet.
+            if (!currentActiveUrl) {
+                const newUrls: [string | null, string | null] = [selectedFile.previewUrl, null];
+                setImageState({ urls: newUrls, activeIndex: 0 });
+                return;
+            }
+    
+            // Subsequent load case: if a new file is selected.
+            if (currentActiveUrl !== selectedFile.previewUrl) {
+                const inactiveIndex = 1 - imageState.activeIndex;
+                setImageState(prevState => {
+                    const newUrls = [...prevState.urls] as [string | null, string | null];
+                    newUrls[inactiveIndex] = selectedFile.previewUrl;
+                    return { ...prevState, urls: newUrls };
+                });
+            }
+        } else {
+            // No file selected, clear everything.
+            setImageState({ urls: [null, null], activeIndex: 0 });
+        }
+    }, [selectedFile]);
+
+    const handleImageLoad = (loadedIndex: number) => {
+        const targetUrl = selectedFile?.previewUrl;
+        // When an image loads, if it's the one we want to display (the target),
+        // and it's not already the active one, make it active to trigger the cross-fade.
+        if (
+            imageState.urls[loadedIndex] === targetUrl &&
+            loadedIndex !== imageState.activeIndex
+        ) {
+            setImageState(prevState => ({ ...prevState, activeIndex: loadedIndex }));
+        }
+    };
+
+
     const handlePanelClose = () => {
         setActivePanel(null);
         onActionCompleted();
@@ -156,12 +199,23 @@ const EditorView: React.FC<EditorViewProps> = ({ files, isApiKeyAvailable, activ
         <div className="h-full w-full flex flex-col lg:flex-row bg-slate-100 dark:bg-slate-950">
             <div className="flex-1 flex flex-col min-h-0">
                 <div className="flex-1 relative flex items-center justify-center p-4 bg-slate-200/50 dark:bg-black/50 overflow-hidden">
-                    {selectedFile && (
-                        <img 
-                            src={selectedFile.previewUrl} 
-                            alt={selectedFile.file.name}
-                            className="max-w-full max-h-full object-contain"
-                        />
+                    {files.length > 0 && (
+                        <>
+                            <img
+                                src={imageState.urls[0] ?? ''}
+                                alt={selectedFile?.file.name}
+                                onLoad={() => handleImageLoad(0)}
+                                className={`absolute max-w-full max-h-full object-contain transition-opacity duration-300 ease-in-out ${imageState.activeIndex === 0 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                style={{ backfaceVisibility: 'hidden' }}
+                            />
+                            <img
+                                src={imageState.urls[1] ?? ''}
+                                alt={selectedFile?.file.name}
+                                onLoad={() => handleImageLoad(1)}
+                                className={`absolute max-w-full max-h-full object-contain transition-opacity duration-300 ease-in-out ${imageState.activeIndex === 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                style={{ backfaceVisibility: 'hidden' }}
+                            />
+                        </>
                     )}
                 </div>
                 
