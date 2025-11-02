@@ -7,6 +7,7 @@ import {
   BatchIcon,
   AutopilotIcon,
   AutoCropIcon,
+  EraserIcon,
   GenerateImageIcon,
   ExportIcon,
   HistoryIcon,
@@ -41,6 +42,7 @@ const mainTools: {icon: React.ReactNode, label: string, view: View, action?: str
 
 const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
   { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
+  { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: "Odstranit objekt", view: "editor", action: "remove-object" },
   { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
   { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vytvořit obrázek", view: "generate" },
   { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor" },

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { applyEditsToImage } from '../utils/imageProcessor';
+import { applyEditsToImage, base64ToFile } from '../utils/imageProcessor';
 import type { AnalysisResult, CropCoordinates, ManualEdits } from '../types';
 
 // Lazily initialize the Google GenAI client to avoid errors on app load if API key is missing.
@@ -161,4 +161,35 @@ export const generateImage = async (prompt: string): Promise<string> => {
     }
 
     throw new Error("AI did not return an image. Please try a different prompt.");
+};
+
+export const removeObject = async (compositeImageBase64: string, fileType: string): Promise<File> => {
+    const ai = getClient();
+    const prompt = `You are an expert photo inpainting AI. The user has provided an image where a specific area to be removed is marked with a semi-transparent magenta color (#FF00FF).
+Your task is to:
+1. Identify the object(s) within the magenta-masked area.
+2. Completely remove the object(s) and the magenta mask itself.
+3. Intelligently fill the removed area with a new background that seamlessly and realistically matches the surrounding context, texture, lighting, and perspective of the original photo.
+The final output should be a clean, high-quality photograph with no trace of the original object or the magenta mask.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [
+                { inlineData: { mimeType: fileType, data: compositeImageBase64 } },
+                { text: prompt },
+            ],
+        },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            return await base64ToFile(part.inlineData.data, "inpainted_image.png", "image/png");
+        }
+    }
+
+    throw new Error("AI did not return an edited image. Please try again.");
 };
