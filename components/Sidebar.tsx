@@ -1,6 +1,5 @@
-
 import React from 'react';
-import type { EditorAction } from '../App';
+import type { EditorAction, View } from '../types';
 import {
   UploadIcon,
   AnalysisIcon,
@@ -19,9 +18,9 @@ interface SidebarProps {
   isOpen: boolean;
   isCollapsed: boolean;
   onClose: () => void;
-  onNavigate: (payload: { view: string; action?: string }) => void;
+  onNavigate: (payload: { view: View; action?: string }) => void;
   onToggleCollapse: () => void;
-  currentView: string;
+  currentView: View;
   activeAction: EditorAction;
 }
 
@@ -33,31 +32,30 @@ interface NavItemProps {
   isActive: boolean;
 }
 
-// FIX: Explicitly typed NavItem as a React.FC to allow the 'key' prop required for list rendering.
-const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
+const mainTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+  { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: "Nahrát fotky", view: "upload" },
+  { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: "AI Analýza", view: "editor", action: "analysis" },
+  { icon: <ManualEditIcon className="w-5 h-5 flex-shrink-0"/>, label: "Manuální úpravy", view: "editor", action: "manual-edit" },
+  { icon: <BatchIcon className="w-5 h-5 flex-shrink-0"/>, label: "Batch zpracování", view: "batch" },
+];
+
+const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+  { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
+  { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
+  { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vytvořit obrázek", view: "generate" },
+  { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor" },
+  { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor" },
+];
+
+const NavItem = ({ icon, label, onClick, isCollapsed, isActive }: NavItemProps) => (
   <button onClick={onClick} className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-sky-500/10 hover:text-sky-600 dark:hover:bg-sky-500/10 dark:hover:text-sky-400 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-3 px-3 py-2.5'} ${isActive ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-300'}`} title={isCollapsed ? label : undefined}>
     {icon}
     {!isCollapsed && <span>{label}</span>}
   </button>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, currentView, activeAction }) => {
-  const mainTools = [
-    { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: "Nahrát fotky", view: "upload" },
-    { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: "AI Analýza", view: "editor", action: "analysis" },
-    { icon: <ManualEditIcon className="w-5 h-5 flex-shrink-0"/>, label: "Manuální úpravy", view: "editor", action: "manual-edit" },
-    { icon: <BatchIcon className="w-5 h-5 flex-shrink-0"/>, label: "Batch zpracování", view: "batch" },
-  ];
-
-  const aiTools = [
-    { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
-    { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
-    { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Generování obrázků", view: "generate-image" },
-    { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor" },
-    { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor" },
-  ];
-  
-  const handleNavigation = (payload: { view: string; action?: string }) => {
+const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, currentView, activeAction }: SidebarProps) => {
+  const handleNavigation = (payload: { view: View; action?: string }) => {
     onNavigate(payload);
     onClose();
   }
@@ -86,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavig
               {isCollapsed && <hr className="mb-4 border-slate-200 dark:border-slate-700" />}
               <div className="space-y-1">
                 {mainTools.map((item) => {
-                  const isActive = item.view === currentView && item.action === (activeAction ? activeAction.action : undefined);
+                  const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : activeAction === null);
                   return (
                     <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
                   );
@@ -98,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isCollapsed, onClose, onNavig
               {isCollapsed && <hr className="my-4 border-slate-200 dark:border-slate-700" />}
               <div className="space-y-1">
                 {aiTools.map((item) => {
-                  const isActive = item.view === currentView && item.action === (activeAction ? activeAction.action : undefined);
+                  const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : !activeAction);
                   return (
                     <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
                   );

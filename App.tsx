@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import UploadView from './components/UploadView';
@@ -7,13 +5,10 @@ import EditorView from './components/EditorView';
 import BatchView from './components/BatchView';
 import GenerateImageView from './components/GenerateImageView';
 import { MenuIcon, MoonIcon, SunIcon, KeyIcon } from './components/icons';
-import type { UploadedFile } from './types';
-import { isApiKeySet } from './utils/apiKey';
+import type { UploadedFile, EditorAction, View } from './types';
 import ApiKeyModal from './components/ApiKeyModal';
 
 type Theme = 'light' | 'dark';
-type View = 'upload' | 'editor' | 'batch' | 'generate-image';
-export type EditorAction = { action: string; timestamp: number } | null;
 
 interface History {
   past: UploadedFile[][];
@@ -29,7 +24,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('dark');
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
   const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const [isApiKeyAvailable, setIsApiKeyAvailable] = useState(isApiKeySet());
 
   const uploadedFiles = history.present;
 
@@ -134,18 +128,22 @@ const App: React.FC = () => {
       };
     });
   }, []);
-
+  
   const handleImageGenerated = useCallback((file: File) => {
     const newFile: UploadedFile = {
-        id: `${file.name}-${file.lastModified}-${Math.random()}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
+      id: `${file.name}-${file.lastModified}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
     };
-    setHistory(h => ({
-        past: [...h.past, h.present],
-        present: [...h.present, newFile],
-        future: [],
-    }));
+    
+    setHistory(h => {
+        const newPresent = [...h.present, newFile];
+        return {
+            past: [...h.past, h.present],
+            present: newPresent,
+            future: []
+        };
+    });
     setCurrentView('editor');
   }, []);
 
@@ -159,11 +157,6 @@ const App: React.FC = () => {
         });
         return { past: [], present: [], future: [] };
       });
-    }
-    
-    if (view === 'generate-image') {
-        setCurrentView('generate-image');
-        return;
     }
     
     if ((view === 'editor' || view === 'batch') && uploadedFiles.length === 0) {
@@ -192,24 +185,19 @@ const App: React.FC = () => {
     setActiveAction(null);
   };
   
-  const handleKeySaved = () => {
-    setIsApiKeyAvailable(true);
-  };
-
   const renderCurrentView = () => {
     switch (currentView) {
       case 'editor':
         return <EditorView 
                   files={uploadedFiles} 
-                  isApiKeyAvailable={isApiKeyAvailable}
                   activeAction={activeAction}
                   onActionCompleted={onActionCompleted}
                   onFileUpdate={handleFileUpdate} 
                 />;
       case 'batch':
         return <BatchView files={uploadedFiles} onProcessingComplete={handleProcessingComplete} />;
-      case 'generate-image':
-        return <GenerateImageView isApiKeyAvailable={isApiKeyAvailable} onImageGenerated={handleImageGenerated} />;
+      case 'generate':
+        return <GenerateImageView onImageGenerated={handleImageGenerated} />;
       case 'upload':
       default:
         return <UploadView onFilesSelected={handleFileSelection} />;
@@ -220,7 +208,7 @@ const App: React.FC = () => {
     upload: 'Nahrát fotografie',
     editor: 'Editor & AI Analýza',
     batch: 'Hromadné zpracování',
-    'generate-image': 'Generování obrázků AI',
+    generate: 'Vytvořit obrázek AI',
   };
 
   return (
@@ -263,7 +251,6 @@ const App: React.FC = () => {
       <ApiKeyModal 
         isOpen={isApiKeyModalOpen}
         onClose={() => setApiKeyModalOpen(false)}
-        onKeySaved={handleKeySaved}
       />
     </div>
   );

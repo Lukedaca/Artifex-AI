@@ -1,55 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Artifex AI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-      }
-    </script>
-    <style>
-      /* Custom scrollbar for a more modern look */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; /* slate-300 */
-        border-radius: 4px;
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #475569; /* slate-600 */
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; /* slate-400 */
-      }
-      .dark ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; /* slate-500 */
-      }
-      html {
-        -webkit-tap-highlight-color: transparent;
-      }
-    </style>
+<html lang="cs" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artifex AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Basic styles to prevent flash of unstyled content and match app's theme */
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background-color: #f8fafc; /* Tailwind's slate-50 */
+    }
+    html.dark body {
+      background-color: #020617; /* Tailwind's slate-950 */
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^18.2.0/client",
+    "react": "https://aistudiocdn.com/react@^18.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.2.0/",
+    "react/": "https://aistudiocdn.com/react@^18.2.0/"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200 antialiased transition-colors duration-300">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+<body>
+  <div id="root"></div>
+</body>
 </html>

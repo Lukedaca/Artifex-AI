@@ -75,8 +75,8 @@ Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii v
     npm install
     ```
 3.  **Nastavte svůj API klíč:**
-    -   Můžete nastavit svůj Google Gemini API klíč jako proměnnou prostředí s názvem `API_KEY` v souboru `.env`.
-    -   Alternativně můžete klíč zadat přímo do aplikace prostřednictvím modálního okna pro API klíč.
+    -   Nastavte svůj Google API klíč jako proměnnou prostředí s názvem `API_KEY`.
+    -   Klíč můžete zdarma získat v [Google AI Studiu](https://aistudio.google.com/app/apikey). Aplikace je nakonfigurována tak, aby klíč používala výhradně z proměnných prostředí.
 
 4.  **Spusťte vývojový server:**
     ```bash

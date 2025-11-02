@@ -5,17 +5,21 @@ import { base64ToFile } from '../utils/imageProcessor';
 import { GenerateImageIcon, UploadIcon } from './icons';
 
 interface GenerateImageViewProps {
-    isApiKeyAvailable: boolean;
     onImageGenerated: (file: File) => void;
 }
 
-const ApiKeyWarning: React.FC = () => (
-    <div className="mt-4 p-3 bg-yellow-100/80 dark:bg-yellow-900/30 border border-yellow-400/50 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
-        Pro použití této funkce je vyžadován API klíč. Klikněte na ikonu klíče v záhlaví a zadejte svůj klíč.
-    </div>
-);
+// Helper to create more user-friendly API error messages
+const getApiErrorMessage = (error: unknown, defaultMessage: string = 'Došlo k neznámé chybě.'): string => {
+    if (error instanceof Error) {
+        if (error.message.toLowerCase().includes('api key') || error.message.toLowerCase().includes('auth')) {
+            return 'API klíč není platný nebo chybí. Zkontrolujte prosím, zda je správně nastaven.';
+        }
+        return error.message;
+    }
+    return defaultMessage;
+};
 
-const GenerateImageView: React.FC<GenerateImageViewProps> = ({ isApiKeyAvailable, onImageGenerated }) => {
+const GenerateImageView: React.FC<GenerateImageViewProps> = ({ onImageGenerated }) => {
     const [prompt, setPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -30,7 +34,7 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({ isApiKeyAvailable
             const base64Image = await generateImage(prompt);
             setGeneratedImage(`data:image/jpeg;base64,${base64Image}`);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Došlo k neznámé chybě při generování obrázku.');
+            setError(getApiErrorMessage(err, 'Došlo k neznámé chybě při generování obrázku.'));
         } finally {
             setIsLoading(false);
         }
@@ -70,19 +74,15 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({ isApiKeyAvailable
                                 placeholder="např. Fotorealistický portrét astronauta jedoucího na koni na Marsu"
                                 className="block w-full border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
                             />
-                            {!isApiKeyAvailable ? (
-                                <ApiKeyWarning />
-                            ) : (
-                                <button
-                                    onClick={handleGenerate}
-                                    disabled={isLoading || !prompt.trim()}
-                                    className="mt-4 w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400/50 disabled:cursor-not-allowed"
-                                >
-                                    <GenerateImageIcon className="-ml-1 mr-3 h-5 w-5" />
-                                    {isLoading ? 'Generuji...' : 'Generovat obrázek'}
-                                </button>
-                            )}
-                            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+                            <button
+                                onClick={handleGenerate}
+                                disabled={isLoading || !prompt.trim()}
+                                className="mt-4 w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400/50 disabled:cursor-not-allowed"
+                            >
+                                <GenerateImageIcon className="-ml-1 mr-3 h-5 w-5" />
+                                {isLoading ? 'Generuji...' : 'Generovat obrázek'}
+                            </button>
+                            {error && <p className="mt-2 text-sm text-red-500 bg-red-500/10 p-3 rounded-md">{error}</p>}
                         </div>
 
                         <div className="md:w-72 flex-shrink-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800/50 rounded-lg p-4 aspect-square">
