@@ -49,7 +49,8 @@ const aiTools: {icon: React.ReactNode, label: string, view: View, action?: strin
   { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor" },
 ];
 
-const NavItem = ({ icon, label, onClick, isCollapsed, isActive }: NavItemProps) => (
+// FIX: Changed component definition to React.FC<NavItemProps> to correctly handle the 'key' prop in lists.
+const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
   <button onClick={onClick} className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-sky-500/10 hover:text-sky-600 dark:hover:bg-sky-500/10 dark:hover:text-sky-400 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-3 px-3 py-2.5'} ${isActive ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-300'}`} title={isCollapsed ? label : undefined}>
     {icon}
     {!isCollapsed && <span>{label}</span>}

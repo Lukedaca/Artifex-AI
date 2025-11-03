@@ -7,6 +7,7 @@ import GenerateImageView from './components/GenerateImageView';
 import { MenuIcon, MoonIcon, SunIcon, KeyIcon } from './components/icons';
 import type { UploadedFile, EditorAction, View } from './types';
 import ApiKeyModal from './components/ApiKeyModal';
+import { hasSelectedApiKey } from './utils/apiKey';
 
 type Theme = 'light' | 'dark';
 
@@ -24,8 +25,27 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('dark');
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
   const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
 
   const uploadedFiles = history.present;
+
+  const checkKeyAndSetModal = useCallback(async () => {
+    setIsCheckingApiKey(true);
+    try {
+      const hasKey = await hasSelectedApiKey();
+      setApiKeyModalOpen(!hasKey);
+    } catch (e) {
+      console.error("Error checking for API key:", e);
+      setApiKeyModalOpen(true);
+    } finally {
+      setIsCheckingApiKey(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkKeyAndSetModal();
+  }, [checkKeyAndSetModal]);
+
 
   const handleUndo = useCallback(() => {
     setHistory(h => {
@@ -211,6 +231,23 @@ const App: React.FC = () => {
     generate: 'Vytvořit obrázek AI',
   };
 
+  if (isCheckingApiKey) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <svg className="animate-spin h-10 w-10 text-sky-500" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+      </div>
+    );
+  }
+
+  if (isApiKeyModalOpen) {
+    return (
+       <ApiKeyModal 
+        isOpen={isApiKeyModalOpen}
+        onKeySelectionAttempt={checkKeyAndSetModal}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
       <Sidebar 
@@ -247,11 +284,6 @@ const App: React.FC = () => {
             {renderCurrentView()}
         </main>
       </div>
-      
-      <ApiKeyModal 
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setApiKeyModalOpen(false)}
-      />
     </div>
   );
 };

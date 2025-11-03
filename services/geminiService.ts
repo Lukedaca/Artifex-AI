@@ -2,19 +2,6 @@ import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { applyEditsToImage, base64ToFile } from '../utils/imageProcessor';
 import type { AnalysisResult, CropCoordinates, ManualEdits } from '../types';
 
-// Lazily initialize the Google GenAI client to avoid errors on app load if API key is missing.
-const getClient = () => {
-  // Guard against 'process' not being defined in a browser environment
-  const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : null;
-  if (!apiKey) {
-    // This error will be caught by the UI and displayed to the user.
-    throw new Error('API key is not available. Please set it up.');
-  }
-  return new GoogleGenAI({
-    apiKey,
-  });
-};
-
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -42,7 +29,7 @@ const parseJsonResponse = <T,>(responseText: string, context: string): T => {
 }
 
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
-    const ai = getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Image = await fileToBase64(file);
     const systemPrompt = `You are an expert photo analyst. Your task is to analyze the provided image and return a JSON object with a detailed description, three specific suggestions for improvement, and key technical information (estimated ISO, Aperture, and Shutter Speed).
 The JSON object must follow this exact structure:
@@ -74,7 +61,7 @@ Only output the raw JSON object. Do not include any other text or explanations.`
 };
 
 export const autopilotImage = async (file: File): Promise<File> => {
-    const ai = getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Image = await fileToBase64(file);
     const systemPrompt = `You are a professional photo editor AI. Your task is to analyze the provided image and determine the optimal settings for a professional-looking enhancement.
 Return a single JSON object with the following keys and value ranges:
@@ -107,7 +94,7 @@ Choose values that will subtly improve the image, making it more vibrant and bal
 };
 
 export const autoCropImage = async (file: File): Promise<CropCoordinates> => {
-    const ai = getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Image = await fileToBase64(file);
     const systemPrompt = `You are an expert in photo composition. Your task is to analyze the composition of the provided image, identify the main subject, and determine the optimal crop to enhance its visual impact according to principles like the rule of thirds.
 Return a single JSON object representing the crop coordinates with four keys: 'x', 'y', 'width', and 'height'.
@@ -143,7 +130,7 @@ Only output the raw JSON object.`;
 };
 
 export const generateImage = async (prompt: string): Promise<string> => {
-    const ai = getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
@@ -164,7 +151,7 @@ export const generateImage = async (prompt: string): Promise<string> => {
 };
 
 export const removeObject = async (compositeImageBase64: string, fileType: string): Promise<File> => {
-    const ai = getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `You are an expert photo inpainting AI. The user has provided an image where a specific area to be removed is marked with a semi-transparent magenta color (#FF00FF).
 Your task is to:
 1. Identify the object(s) within the magenta-masked area.
