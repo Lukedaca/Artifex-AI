@@ -26,6 +26,7 @@ const App: React.FC = () => {
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
   const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
+  const [contentKey, setContentKey] = useState(0); // Used to re-trigger animations
 
   const uploadedFiles = history.present;
 
@@ -116,21 +117,19 @@ const App: React.FC = () => {
     }));
     
     setHistory(h => {
-      // Clean up all URLs from the previous session's history
       [...h.past.flat(), ...h.present, ...h.future.flat()].forEach(f => {
         if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
       });
-      // Start a new history
       return { past: [], present: newFiles, future: [] };
     });
     setCurrentView('editor');
+    setContentKey(prev => prev + 1);
   }, []);
   
   const handleFileUpdate = useCallback((fileId: string, newFile: File) => {
     setHistory(h => {
       const newPresent = h.present.map(f => {
         if (f.id === fileId) {
-          // Note: We don't revoke the old URL here to keep it available in history
           return {
             id: fileId,
             file: newFile,
@@ -165,12 +164,12 @@ const App: React.FC = () => {
         };
     });
     setCurrentView('editor');
+    setContentKey(prev => prev + 1);
   }, []);
 
   const handleNavigation = useCallback((payload: { view: View; action?: string }) => {
     const { view, action } = payload;
     if (view === 'upload') {
-      // Clear history and revoke all URLs when navigating to upload
       setHistory(h => {
         [...h.past.flat(), ...h.present, ...h.future.flat()].forEach(f => {
           if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
@@ -181,24 +180,29 @@ const App: React.FC = () => {
     
     if ((view === 'editor' || view === 'batch') && uploadedFiles.length === 0) {
       setCurrentView('upload');
+      setContentKey(prev => prev + 1);
       return;
     }
-    setCurrentView(view);
+    
+    if (currentView !== view) {
+      setCurrentView(view);
+      setContentKey(prev => prev + 1);
+    }
     
     if (action) {
       setActiveAction({ action, timestamp: Date.now() });
     }
 
-  }, [uploadedFiles.length]);
+  }, [uploadedFiles.length, currentView]);
 
   const handleProcessingComplete = (newFiles: UploadedFile[]) => {
-    // Don't revoke old URLs, just push the old state to history
     setHistory(h => ({
       past: [...h.past, h.present],
       present: newFiles,
       future: []
     }));
     setCurrentView('editor');
+    setContentKey(prev => prev + 1);
   };
   
   const onActionCompleted = () => {
@@ -233,8 +237,8 @@ const App: React.FC = () => {
 
   if (isCheckingApiKey) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <svg className="animate-spin h-10 w-10 text-sky-500" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
+        <svg className="animate-spin h-10 w-10 text-fuchsia-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
       </div>
     );
   }
@@ -243,13 +247,13 @@ const App: React.FC = () => {
     return (
        <ApiKeyModal 
         isOpen={isApiKeyModalOpen}
-        onKeySelectionAttempt={checkKeyAndSetModal}
+        onKeySelectionAttempt={() => setApiKeyModalOpen(false)}
       />
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
+    <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-300 overflow-hidden">
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setSidebarOpen(false)} 
@@ -260,27 +264,27 @@ const App: React.FC = () => {
         activeAction={activeAction}
       />
       
-      <div className={`flex-1 flex flex-col min-w-0 h-full transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-60'}`}>
-        <header className="flex-shrink-0 flex items-center justify-between h-16 px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/80 backdrop-blur-lg z-10">
+      <div className={`flex-1 flex flex-col min-w-0 h-full transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
+        <header className="flex-shrink-0 flex items-center justify-between h-20 px-4 md:px-6 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl z-10">
           <div className="flex items-center space-x-4">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors">
                 <MenuIcon className="w-6 h-6" />
             </button>
-            <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-200 hidden sm:block">
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 hidden sm:block">
               {viewTitles[currentView]}
             </h1>
           </div>
           <div className="flex items-center space-x-2">
             <button onClick={toggleTheme} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all" title="Změnit téma">
-                {theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                {theme === 'dark' ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
             </button>
             <button onClick={() => setApiKeyModalOpen(true)} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all" title="Zadat API klíč">
-                <KeyIcon className="w-5 h-5" />
+                <KeyIcon className="w-6 h-6" />
             </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto">
+        <main key={contentKey} className="flex-1 overflow-auto animate-fade-in" style={{ animation: 'fade-in 0.5s ease-in-out' }}>
             {renderCurrentView()}
         </main>
       </div>

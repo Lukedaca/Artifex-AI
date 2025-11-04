@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { applyEditsToImage, base64ToFile } from '../utils/imageProcessor';
 import type { AnalysisResult, CropCoordinates, ManualEdits } from '../types';
@@ -96,10 +97,17 @@ Choose values that will subtly improve the image, making it more vibrant and bal
 export const autoCropImage = async (file: File): Promise<CropCoordinates> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Image = await fileToBase64(file);
-    const systemPrompt = `You are an expert in photo composition. Your task is to analyze the composition of the provided image, identify the main subject, and determine the optimal crop to enhance its visual impact according to principles like the rule of thirds.
-Return a single JSON object representing the crop coordinates with four keys: 'x', 'y', 'width', and 'height'.
-Each value must be a number between 0 and 1, representing the top-left corner (x, y) and dimensions (width, height) as a percentage of the original image size.
-The JSON object must look like this: {"x": 0.1, "y": 0.1, "width": 0.8, "height": 0.8}.
+    const systemPrompt = `You are a world-class AI photo editor with a deep understanding of artistic composition and subject integrity. Your task is to perform an intelligent auto-crop on the provided image.
+
+Your analysis should:
+1.  **Identify the primary subject(s)** and the overall scene.
+2.  **Determine the most compelling composition.** Consider principles like the rule of thirds, leading lines, framing, and negative space.
+3.  **Intelligently select the optimal aspect ratio** (e.g., 16:9 for landscapes, 4:5 for portraits, 1:1 for centered subjects) that best suits the subject and composition. Do not be constrained by the original aspect ratio.
+4.  **Preserve subject integrity.** Crucially, avoid awkward cuts of limbs (hands, feet, etc.) or key elements unless it is clearly beneficial for the composition (e.g., a tight headshot).
+
+Return a single JSON object representing the final crop coordinates. The coordinates must be normalized between 0 and 1.
+The JSON object must have four keys: 'x', 'y', 'width', and 'height'.
+Example: {"x": 0.1, "y": 0.15, "width": 0.8, "height": 0.7}.
 Only output the raw JSON object.`;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
@@ -152,12 +160,12 @@ export const generateImage = async (prompt: string): Promise<string> => {
 
 export const removeObject = async (compositeImageBase64: string, fileType: string): Promise<File> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `You are an expert photo inpainting AI. The user has provided an image where a specific area to be removed is marked with a semi-transparent magenta color (#FF00FF).
-Your task is to:
-1. Identify the object(s) within the magenta-masked area.
-2. Completely remove the object(s) and the magenta mask itself.
-3. Intelligently fill the removed area with a new background that seamlessly and realistically matches the surrounding context, texture, lighting, and perspective of the original photo.
-The final output should be a clean, high-quality photograph with no trace of the original object or the magenta mask.`;
+    const prompt = `You are a sophisticated inpainting AI specializing in seamless object removal. An image is provided with a semi-transparent magenta (#FF00FF) mask overlaying an object or area designated for removal.
+Your precise task is to:
+1. Analyze the area beneath the magenta mask.
+2. Completely and cleanly remove both the underlying object(s) AND the magenta mask itself.
+3. Reconstruct the cleared area by intelligently sampling and generating a background that perfectly and realistically matches the surrounding context. This includes matching textures, lighting, shadows, colors, and perspective.
+**Crucially, do NOT introduce any new objects or subjects into the filled area.** The goal is a flawless removal, making it appear as if the object was never there. The output must be a single, clean photographic image.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',

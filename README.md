@@ -1,4 +1,4 @@
-# Artifex AI v2.0
+# Artifex AI v3.1 "Celestial"
 
 
 **Artifex AI je moderní aplikace pro úpravu a analýzu fotografií poháněná umělou inteligencí, určená pro fotografy všech úrovní. Kombinuje výkonné schopnosti AI s komplexní sadou nástrojů pro manuální úpravy, vše zabaleno do elegantního, responzivního a uživatelsky přívětivého rozhraní.**
@@ -7,19 +7,15 @@
 
 ## ✨ Klíčové funkce
 
-### 1. Elegantní a responzivní uživatelské rozhraní
-Krásné a intuitivní rozhraní, které bezproblémově funguje na všech zařízeních. Zahrnuje ohromující tmavý režim pro pohodlné úpravy za jakýchkoli světelných podmínek.
-
-
-
-
+### 1. Prémiový UI Design "Celestial"
+Aplikace byla kompletně redesignována s využitím pokročilých designových principů. Nové rozhraní "Celestial" přináší:
+- **Živé Osvětlení:** Aktivní prvky vrhají jemnou, pulzující "aurora" záři, která reaguje na každý pohyb myši a vytváří dynamický dojem.
+- **Smysluplné Animace:** Prvky se načítají v elegantních kaskádách a přechody mezi pohledy jsou plynulé. Indikátor v navigaci se hladce přesouvá mezi položkami, což poskytuje špičkový uživatelský zážitek.
+- **Hmatatelná Hloubka:** Jemná textura na pozadí a "plovoucí" panely s glassmorphism efektem dodávají rozhraní hloubku a prémiový pocit.
+- **Dokonalost v Detailu:** Každý komponent, od posuvníků po oblast pro nahrávání, byl precizně navržen s vlastními styly a mikro-interakcemi.
 
 ### 2. Snadné nahrávání fotografií
-Snadno nahrajte své fotografie pomocí jednoduchého rozhraní drag-and-drop nebo výběrem souborů ze svého zařízení. Aplikace podporuje více formátů obrázků, včetně JPG, PNG, RAW a TIFF.
-
-
-
-
+Snadno nahrajte své fotografie pomocí jednoduchého rozhraní drag-and-drop s animovaným ohraničením a interaktivní září, které vás zve k akci.
 
 ### 3. Hloubková AI analýza
 Využijte sílu Google Gemini API k získání podrobné analýzy vašich fotografií. AI poskytuje:
@@ -27,26 +23,14 @@ Využijte sílu Google Gemini API k získání podrobné analýzy vašich fotogr
 - Tři konkrétní návrhy na vylepšení (např. kompozice, osvětlení).
 - Odhadované technické detaily jako ISO, clona a rychlost závěrky.
 
-
-
-
-
 ### 4. Autopilot AI vylepšení
 Jediným kliknutím nechte AI automaticky vylepšit vaši fotografii. Autopilot inteligentně upravuje jas, kontrast a vyvážení barev, aby vytvořil profesionálně upravený výsledek.
 
-
 ### 5. Komplexní sada pro manuální úpravy
-Pro ty, kteří preferují jemné ovládání, nabízí panel pro manuální úpravy řadu nastavení:
-- **Oříznutí:** Ořízněte obrázky na standardní poměry stran (16:9, 4:3, 1:1, 3:2).
-- **Úpravy:** Posuvníky pro jas, kontrast, sytost a ostrost.
-- **Živý náhled:** Sledujte své změny v reálném čase před jejich použitím.
-
-
+Pro ty, kteří preferují jemné ovládání, nabízí panel pro manuální úpravy řadu nastavení, včetně inteligentního oříznutí a odstranění objektů.
 
 ### 6. Výkonné hromadné zpracování
 Ušetřete čas použitím úprav na více obrázků najednou. Aktuálně podporuje hromadné oříznutí na vybraný poměr stran pro všechny nahrané fotografie.
-
-
 
 ### 7. Plná historie Zpět/Vpřed
 Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii vašich úprav. Použijte standardní klávesové zkratky (`Ctrl+Z` pro zpět, `Ctrl+Y` pro vpřed) k navigaci mezi změnami.
@@ -59,7 +43,7 @@ Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii v
 -   **Frontend:** [React](https://reactjs.org/) & [TypeScript](https://www.typescriptlang.org/)
 -   **Stylování:** [Tailwind CSS](https://tailwindcss.com/)
 -   **AI engine:** [Google Gemini API](https://ai.google.dev/)
--   **Build nástroj:** Vite (odvozeno z nastavení `index.html`)
+-   **Písmo:** [Inter](https://fonts.google.com/specimen/Inter)
 
 ---
 
@@ -92,4 +76,4 @@ Experimentujte volně bez obav z chyb. Aplikace uchovává kompletní historii v
 -   Ukládání a používání vlastních přednastavení (presetů).
 -   Pokročilejší nástroje pro manuální úpravy (křivky, selektivní úpravy).
 -   Možnosti exportu s různým nastavením kvality.
--   AI odstranění objektů nebo výměna pozadí.
+-   AI výměna pozadí.

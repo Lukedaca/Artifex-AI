@@ -1,10 +1,12 @@
-// FIX: Resolve type conflict by using an inline type for window.aistudio to avoid a name collision with a potentially global 'AIStudio' type.
+// FIX: Resolve TypeScript type conflict by using a named interface `AIStudio` for `window.aistudio`.
+// The previous inline type conflicted with an existing global definition.
 declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
   interface Window {
-    aistudio?: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
+    aistudio?: AIStudio;
   }
 }
 
