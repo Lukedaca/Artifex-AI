@@ -125,6 +125,95 @@ export const cropImageToAspectRatio = (file: File, aspectRatio: number): Promise
     });
 };
 
+export const resizeImage = (file: File, targetWidth: number): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                URL.revokeObjectURL(objectUrl);
+                return reject(new Error('Could not get canvas context'));
+            }
+
+            const originalWidth = img.width;
+            const originalHeight = img.height;
+            const aspectRatio = originalWidth / originalHeight;
+
+            const targetHeight = targetWidth / aspectRatio;
+            
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const newFileName = file.name.replace(/\.[^/.]+$/, "") + `_resized.png`;
+                    resolve(new File([blob], newFileName, { type: 'image/png' }));
+                } else {
+                    reject(new Error('Failed to create blob from canvas'));
+                }
+                URL.revokeObjectURL(objectUrl);
+            }, 'image/png');
+        };
+        img.onerror = (err) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        };
+        img.src = objectUrl;
+    });
+};
+
+export const resizeImageForAnalysis = (file: File, maxDimension: number): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                URL.revokeObjectURL(objectUrl);
+                return reject(new Error('Could not get canvas context'));
+            }
+
+            let { width, height } = img;
+
+            if (width > height) {
+                if (width > maxDimension) {
+                    height = Math.round(height * (maxDimension / width));
+                    width = maxDimension;
+                }
+            } else {
+                if (height > maxDimension) {
+                    width = Math.round(width * (maxDimension / height));
+                    height = maxDimension;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('Failed to create blob from canvas for resizing'));
+                }
+                URL.revokeObjectURL(objectUrl);
+            }, 'image/jpeg', 0.9); // Use JPEG for smaller size
+        };
+        img.onerror = (err) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        };
+        img.src = objectUrl;
+    });
+};
+
 export const base64ToFile = (base64: string, filename: string, mimeType: string): Promise<File> => {
     return fetch(`data:${mimeType};base64,${base64}`)
         .then(res => res.blob())
@@ -210,6 +299,76 @@ const extractEmbeddedJpeg = async (file: File): Promise<File | null> => {
     }
 };
 
+/**
+ * Scans a file for embedded JPEG data by looking for SOI and EOI markers.
+ * This is a robust fallback for RAW files that are not easily parsed, like CR3.
+ * @param file The file to scan.
+ * @returns A promise that resolves to the largest found JPEG as a new File object, or null.
+ */
+const scanForJpeg = async (file: File): Promise<File | null> => {
+    try {
+        const buffer = await file.arrayBuffer();
+        const data = new Uint8Array(buffer);
+        
+        const jpegSOI = [0xFF, 0xD8, 0xFF]; // Start Of Image marker prefix
+        const jpegEOI = [0xFF, 0xD9];       // End Of Image marker
+
+        const previews = [];
+        let searchIndex = 0;
+
+        while (searchIndex < data.length) {
+            let startIndex = -1;
+            // Find the start of a potential JPEG (SOI marker FF D8 FF)
+            for (let i = searchIndex; i < data.length - 2; i++) {
+                // Check for FF D8 FF E0/E1/etc. to be more specific
+                if (data[i] === jpegSOI[0] && data[i+1] === jpegSOI[1] && data[i+2] === jpegSOI[2]) {
+                    startIndex = i;
+                    break;
+                }
+            }
+
+            if (startIndex === -1) {
+                break; // No more SOI markers found
+            }
+
+            // Find the end of this JPEG (EOI marker FF D9)
+            let endIndex = -1;
+            for (let j = startIndex + 2; j < data.length - 1; j++) {
+                if (data[j] === jpegEOI[0] && data[j+1] === jpegEOI[1]) {
+                    endIndex = j + 2; // Include the EOI marker itself
+                    break;
+                }
+            }
+            
+            if (endIndex !== -1) {
+                previews.push({ start: startIndex, length: endIndex - startIndex });
+                searchIndex = endIndex; // Continue searching from the end of the found JPEG
+            } else {
+                // If EOI isn't found, this wasn't a valid JPEG.
+                // Move past the found SOI to avoid infinite loops.
+                searchIndex = startIndex + 1; 
+            }
+        }
+
+        if (previews.length === 0) {
+            return null;
+        }
+
+        // The best preview is the largest one.
+        previews.sort((a, b) => b.length - a.length);
+        const bestPreview = previews[0];
+        
+        const jpegData = buffer.slice(bestPreview.start, bestPreview.start + bestPreview.length);
+        const blob = new Blob([jpegData], { type: 'image/jpeg' });
+        const newFileName = file.name.replace(/\.[^/.]+$/, ".jpg");
+        
+        return new File([blob], newFileName, { type: 'image/jpeg' });
+
+    } catch (e) {
+        console.error("Error scanning for embedded JPEG:", e);
+        return null;
+    }
+}
 
 export const normalizeImageFile = (file: File): Promise<File> => {
     return new Promise(async (resolve, reject) => {
@@ -219,16 +378,28 @@ export const normalizeImageFile = (file: File): Promise<File> => {
             return resolve(file);
         }
 
-        // For known RAW extensions, first try to extract the embedded JPEG preview
         const extension = file.name.split('.').pop()?.toLowerCase();
+        
+        // For known RAW extensions, try to extract the embedded full-quality JPEG preview
         if (extension && RAW_EXTENSIONS.includes(extension)) {
-            const extractedJpeg = await extractEmbeddedJpeg(file);
+            let extractedJpeg: File | null = null;
+            
+            // For TIFF-based RAWs, use the parser. For others (like CR3), it will fail and go to the fallback.
+            extractedJpeg = await extractEmbeddedJpeg(file);
+            
+            // If the primary TIFF parser failed, fall back to a more generic JPEG scan.
+            // This is especially useful for non-TIFF based RAWs like CR3.
+            if (!extractedJpeg) {
+                console.warn(`TIFF parser failed for ${extension}, falling back to generic JPEG scan.`);
+                extractedJpeg = await scanForJpeg(file);
+            }
+
             if (extractedJpeg) {
                 return resolve(extractedJpeg);
             }
         }
 
-        // As a fallback for other formats (like TIFF) or RAWs where extraction failed,
+        // As a final fallback for other formats or RAWs where all extraction failed,
         // try to let the browser decode it by drawing it to a canvas.
         const img = new Image();
         const objectUrl = URL.createObjectURL(file);

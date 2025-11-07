@@ -12,7 +12,10 @@ import {
   ExportIcon,
   HistoryIcon,
   LogoIcon,
-  ChevronDoubleLeftIcon
+  ChevronDoubleLeftIcon,
+  StyleTransferIcon,
+  BackgroundReplacementIcon,
+  PresetIcon
 } from './icons';
 
 interface SidebarProps {
@@ -41,10 +44,16 @@ const mainTools: {icon: React.ReactNode, label: string, view: View, action?: str
   { icon: <BatchIcon className="w-5 h-5 flex-shrink-0"/>, label: "Batch zpracování", view: "batch" },
 ];
 
+const presetsTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+  { icon: <PresetIcon className="w-5 h-5 flex-shrink-0"/>, label: "Uživatelské presety", view: "editor", action: "user-presets" },
+];
+
 const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
   { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
   { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: "Odstranit objekt", view: "editor", action: "remove-object" },
   { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
+  { icon: <StyleTransferIcon className="w-5 h-5 flex-shrink-0"/>, label: "Přenos stylu", view: "editor", action: "style-transfer" },
+  { icon: <BackgroundReplacementIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vyměnit pozadí", view: "editor", action: "replace-background" },
   { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vytvořit obrázek", view: "generate" },
   { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor", action: "export" },
   { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor", action: "history" },
@@ -95,6 +104,18 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : activeAction === null);
                   return (
                     <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
+                  );
+                })}
+              </div>
+            </div>
+             <div>
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">Styly & Presety</h2>}
+              {isCollapsed && <hr className="my-4 border-slate-200/80 dark:border-slate-700/80" />}
+              <div className="space-y-1.5 relative">
+                {presetsTools.map((item) => {
+                  const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : !activeAction);
+                  return (
+                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive}/>
                   );
                 })}
               </div>

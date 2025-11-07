@@ -1,25 +1,38 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { UploadedFile } from '../types';
-import { cropImageToAspectRatio } from '../utils/imageProcessor';
-import { BatchIcon, XIcon } from './icons';
+import type { UploadedFile, Preset } from '../types';
+import { cropImageToAspectRatio, resizeImage, applyEditsToImage } from '../utils/imageProcessor';
+import { autopilotImage } from '../services/geminiService';
+import { getPresets } from '../services/userProfileService';
+import { BatchIcon, XIcon, AutopilotIcon, PresetIcon, AutoCropIcon, ResizeIcon } from './icons';
 
 interface BatchViewProps {
   files: UploadedFile[];
-  onProcessingComplete: (processedFiles: UploadedFile[]) => void;
+  onProcessingComplete: (processedFiles: UploadedFile[], actionName: string) => void;
 }
 
 const ASPECT_RATIOS = [
-    { label: '16:9 (Širokoúhlý)', value: 16 / 9 },
-    { label: '4:3 (Standardní)', value: 4 / 3 },
-    { label: '1:1 (Čtverec)', value: 1 },
-    { label: '3:2 (Fotografie)', value: 3 / 2 },
+    { label: 'Neřezat', value: 'none' },
+    { label: '16:9 (Širokoúhlý)', value: String(16 / 9) },
+    { label: '4:3 (Standardní)', value: String(4 / 3) },
+    { label: '1:1 (Čtverec)', value: String(1) },
+    { label: '3:2 (Fotografie)', value: String(3 / 2) },
+    { label: '4:5 (Portrét)', value: String(4 / 5) },
 ];
 
 const BatchView: React.FC<BatchViewProps> = ({ files, onProcessingComplete }) => {
     const [isProcessing, setIsProcessing] = useState(false);
-    const [selectedAspectRatio, setSelectedAspectRatio] = useState(ASPECT_RATIOS[0].value);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
     const [lightboxImage, setLightboxImage] = useState<UploadedFile | null>(null);
+
+    // Pipeline state
+    const [userPresets, setUserPresets] = useState<Preset[]>([]);
+    const [selectedEnhancement, setSelectedEnhancement] = useState('none'); // 'none', 'autopilot', or preset.id
+    const [selectedCrop, setSelectedCrop] = useState('none'); // aspect ratio as string, or 'none'
+    const [resizeWidth, setResizeWidth] = useState('');
+
+    useEffect(() => {
+        setUserPresets(getPresets());
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -40,26 +53,54 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onProcessingComplete }) =>
     const handleProcessImages = useCallback(async () => {
         setIsProcessing(true);
         setProgress({ current: 0, total: files.length });
-        
-        const processedFilePromises = files.map(async (uploadedFile) => {
+
+        const newFiles: UploadedFile[] = [];
+
+        for (const uploadedFile of files) {
             try {
-                const newFile = await cropImageToAspectRatio(uploadedFile.file, selectedAspectRatio);
-                setProgress(prev => ({ ...prev, current: prev.current + 1 }));
-                return {
-                    id: `${newFile.name}-${newFile.lastModified}-${Math.random()}`,
-                    file: newFile,
-                    previewUrl: URL.createObjectURL(newFile),
-                };
+                let currentFile = uploadedFile.file;
+                const originalUrl = uploadedFile.originalPreviewUrl;
+
+                // Step 1: Enhancement
+                if (selectedEnhancement === 'autopilot') {
+                    currentFile = (await autopilotImage(currentFile)).file;
+                } else if (selectedEnhancement !== 'none') {
+                    const preset = userPresets.find(p => p.id === selectedEnhancement);
+                    if (preset) {
+                        const blob = await applyEditsToImage(currentFile, preset.edits);
+                        currentFile = new File([blob], currentFile.name.replace(/\.[^/.]+$/, "_preset.png"), { type: 'image/png' });
+                    }
+                }
+
+                // Step 2: Cropping
+                if (selectedCrop !== 'none') {
+                    currentFile = await cropImageToAspectRatio(currentFile, Number(selectedCrop));
+                }
+
+                // Step 3: Resizing
+                const width = parseInt(resizeWidth, 10);
+                if (!isNaN(width) && width > 0) {
+                    currentFile = await resizeImage(currentFile, width);
+                }
+
+                newFiles.push({
+                    id: `${currentFile.name}-${currentFile.lastModified}-${Math.random()}`,
+                    file: currentFile,
+                    previewUrl: URL.createObjectURL(currentFile),
+                    originalPreviewUrl: originalUrl, // Preserve original for comparison
+                });
+
             } catch (error) {
                 console.error(`Failed to process ${uploadedFile.file.name}:`, error);
-                return { ...uploadedFile, id: uploadedFile.id }; 
+                newFiles.push({ ...uploadedFile, id: uploadedFile.id }); // Keep original on error
+            } finally {
+                setProgress(prev => ({ ...prev, current: prev.current + 1 }));
             }
-        });
+        }
         
-        const processedFiles = await Promise.all(processedFilePromises);
+        onProcessingComplete(newFiles, 'Hromadné zpracování');
 
-        onProcessingComplete(processedFiles);
-    }, [files, selectedAspectRatio, onProcessingComplete]);
+    }, [files, selectedEnhancement, selectedCrop, resizeWidth, userPresets, onProcessingComplete]);
 
     if (files.length === 0) {
         return (
@@ -74,25 +115,64 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onProcessingComplete }) =>
             <div className="h-full w-full flex flex-col p-4 sm:p-6 lg:p-8">
                 <div className="flex-shrink-0 mb-8">
                     <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Hromadné zpracování</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1 text-lg">Aplikujte úpravy na všechny nahrané obrázky najednou.</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 text-lg">Sestavte sekvenci úprav a aplikujte ji na všechny obrázky najednou.</p>
                 </div>
                 
-                <div className="flex-shrink-0 mb-8 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-xl flex flex-col sm:flex-row items-center gap-4 border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
-                    <div className="w-full sm:w-auto">
-                        <label htmlFor="aspect-ratio" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Poměr stran pro oříznutí</label>
-                        <select
-                            id="aspect-ratio"
-                            value={selectedAspectRatio}
-                            onChange={(e) => setSelectedAspectRatio(Number(e.target.value))}
-                            disabled={isProcessing}
-                            className="block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm rounded-md text-slate-800 dark:text-white"
-                        >
-                            {ASPECT_RATIOS.map(ratio => (
-                                <option key={ratio.label} value={ratio.value}>{ratio.label}</option>
-                            ))}
-                        </select>
+                <div className="flex-shrink-0 mb-8 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-6 rounded-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                        {/* Enhancement Step */}
+                        <div className="space-y-2">
+                            <label htmlFor="enhancement" className="flex items-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <AutopilotIcon className="w-5 h-5 mr-2" /> Krok 1: Vylepšení
+                            </label>
+                            <select
+                                id="enhancement"
+                                value={selectedEnhancement}
+                                onChange={(e) => setSelectedEnhancement(e.target.value)}
+                                disabled={isProcessing}
+                                className="block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm rounded-md text-slate-800 dark:text-white"
+                            >
+                                <option value="none">Žádné</option>
+                                <option value="autopilot">AI Autopilot</option>
+                                {userPresets.length > 0 && <optgroup label="Vaše presety">
+                                    {userPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </optgroup>}
+                            </select>
+                        </div>
+                        {/* Crop Step */}
+                        <div className="space-y-2">
+                            <label htmlFor="aspect-ratio" className="flex items-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <AutoCropIcon className="w-5 h-5 mr-2" /> Krok 2: Oříznutí
+                            </label>
+                            <select
+                                id="aspect-ratio"
+                                value={selectedCrop}
+                                onChange={(e) => setSelectedCrop(e.target.value)}
+                                disabled={isProcessing}
+                                className="block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm rounded-md text-slate-800 dark:text-white"
+                            >
+                                {ASPECT_RATIOS.map(ratio => (
+                                    <option key={ratio.label} value={ratio.value}>{ratio.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {/* Resize Step */}
+                        <div className="space-y-2">
+                           <label htmlFor="resize-width" className="flex items-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <ResizeIcon className="w-5 h-5 mr-2" /> Krok 3: Změna velikosti
+                            </label>
+                            <input
+                                type="number"
+                                id="resize-width"
+                                value={resizeWidth}
+                                onChange={(e) => setResizeWidth(e.target.value)}
+                                disabled={isProcessing}
+                                placeholder="Šířka v px (např. 2048)"
+                                className="block w-full pl-3 pr-3 py-2.5 text-base border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm rounded-md text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                            />
+                        </div>
                     </div>
-                    <div className="w-full sm:w-auto sm:ml-auto">
+                     <div className="mt-6 pt-6 border-t border-slate-200/50 dark:border-slate-800/50 flex justify-end">
                         <button
                             onClick={handleProcessImages}
                             disabled={isProcessing}
