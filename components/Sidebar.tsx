@@ -46,8 +46,8 @@ const aiTools: {icon: React.ReactNode, label: string, view: View, action?: strin
   { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: "Odstranit objekt", view: "editor", action: "remove-object" },
   { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
   { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vytvořit obrázek", view: "generate" },
-  { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor" },
-  { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor" },
+  { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor", action: "export" },
+  { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor", action: "history" },
 ];
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive, itemRef }) => (

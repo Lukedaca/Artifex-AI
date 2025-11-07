@@ -31,9 +31,9 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const acceptedFiles = Array.from(e.dataTransfer.files).filter((file: File) => file.type.startsWith('image/'));
-      if (acceptedFiles.length > 0) {
-        onFilesSelected(acceptedFiles);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        onFilesSelected(files);
       }
       e.dataTransfer.clearData();
     }
@@ -41,9 +41,9 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
   
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const acceptedFiles = Array.from(e.target.files).filter((file: File) => file.type.startsWith('image/'));
-      if (acceptedFiles.length > 0) {
-        onFilesSelected(acceptedFiles);
+      const files = Array.from(e.target.files);
+      if (files.length > 0) {
+        onFilesSelected(files);
       }
     }
   };
@@ -102,7 +102,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/jpeg,image/png,image/gif,image/webp,image/raw,image/tiff"
+                    accept="image/*,.cr2,.cr3,.nef,.arw,.orf,.raf,.dng,.pef,.rw2"
                     onChange={handleFileSelect}
                     className="hidden"
                 />
@@ -116,7 +116,7 @@ const UploadView: React.FC<UploadViewProps> = ({ onFilesSelected }) => {
                 </button>
             </div>
             <p className="mt-10 text-xs text-slate-400 dark:text-slate-500">
-              Podporované formáty: JPG, PNG, RAW, TIFF (max 10 souborů)
+              Podporujeme JPG, PNG, WEBP a většinu RAW formátů (pomocí jejich náhledů v plné kvalitě).
             </p>
         </div>
       </div>

@@ -4,10 +4,11 @@ import UploadView from './components/UploadView';
 import EditorView from './components/EditorView';
 import BatchView from './components/BatchView';
 import GenerateImageView from './components/GenerateImageView';
-import { MenuIcon, MoonIcon, SunIcon, KeyIcon } from './components/icons';
+import { MenuIcon, MoonIcon, SunIcon, KeyIcon, XCircleIcon, InformationCircleIcon } from './components/icons';
 import type { UploadedFile, EditorAction, View } from './types';
 import ApiKeyModal from './components/ApiKeyModal';
 import { hasSelectedApiKey } from './utils/apiKey';
+import { normalizeImageFile } from './utils/imageProcessor';
 
 type Theme = 'light' | 'dark';
 
@@ -15,6 +16,12 @@ interface History {
   past: UploadedFile[][];
   present: UploadedFile[];
   future: UploadedFile[][];
+}
+
+interface Notification {
+  id: number;
+  message: string;
+  type: 'error' | 'info';
 }
 
 const App: React.FC = () => {
@@ -27,8 +34,21 @@ const App: React.FC = () => {
   const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
   const [contentKey, setContentKey] = useState(0); // Used to re-trigger animations
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const uploadedFiles = history.present;
+
+  const removeNotification = (id: number) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+  
+  const addNotification = useCallback((message: string, type: 'error' | 'info' = 'info') => {
+    const id = Date.now() + Math.random();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      removeNotification(id);
+    }, 6000);
+  }, []);
 
   const checkKeyAndSetModal = useCallback(async () => {
     setIsCheckingApiKey(true);
@@ -109,12 +129,27 @@ const App: React.FC = () => {
     setSidebarCollapsed(prev => !prev);
   }
 
-  const handleFileSelection = useCallback((files: File[]) => {
-    const newFiles: UploadedFile[] = files.map(file => ({
-      id: `${file.name}-${file.lastModified}-${Math.random()}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
+  const handleFileSelection = useCallback(async (files: File[]) => {
+    const newFilesPromises: Promise<UploadedFile | null>[] = files.map(file => {
+      return normalizeImageFile(file)
+        .then(normalizedFile => ({
+          id: `${normalizedFile.name}-${normalizedFile.lastModified}-${Math.random()}`,
+          file: normalizedFile,
+          previewUrl: URL.createObjectURL(normalizedFile),
+        }))
+        .catch(error => {
+          console.error(`Chyba při zpracování souboru ${file.name}:`, error);
+          addNotification(`Chyba u '${file.name}': ${error.message}`, 'error');
+          return null;
+        });
+    });
+
+    const settledFiles = await Promise.all(newFilesPromises);
+    const newFiles = settledFiles.filter((f): f is UploadedFile => f !== null);
+
+    if (newFiles.length === 0) {
+      return;
+    }
     
     setHistory(h => {
       [...h.past.flat(), ...h.present, ...h.future.flat()].forEach(f => {
@@ -123,18 +158,20 @@ const App: React.FC = () => {
       return { past: [], present: newFiles, future: [] };
     });
     setCurrentView('editor');
+    setActiveAction(null);
     setContentKey(prev => prev + 1);
-  }, []);
+  }, [addNotification]);
   
   const handleFileUpdate = useCallback((fileId: string, newFile: File) => {
     setHistory(h => {
       const newPresent = h.present.map(f => {
         if (f.id === fileId) {
+          URL.revokeObjectURL(f.previewUrl); // Clean up old object URL to prevent memory leaks
           return {
-            id: fileId,
+            ...f, // Preserve other properties like id
             file: newFile,
             previewUrl: URL.createObjectURL(newFile),
-            analysis: undefined,
+            analysis: undefined, // Analysis is for the old image, so clear it
             isAnalyzing: false,
           };
         }
@@ -146,6 +183,19 @@ const App: React.FC = () => {
         future: []
       };
     });
+  }, []);
+
+  const handleFileMetadataUpdate = useCallback((fileId: string, updates: Partial<Omit<UploadedFile, 'file' | 'previewUrl' | 'id'>>) => {
+      setHistory(h => {
+          const newPresent = h.present.map(f => {
+              if (f.id === fileId) {
+                  return { ...f, ...updates };
+              }
+              return f;
+          });
+          // Do not create a new history entry for metadata changes like analysis results
+          return { ...h, present: newPresent };
+      });
   }, []);
   
   const handleImageGenerated = useCallback((file: File) => {
@@ -189,9 +239,7 @@ const App: React.FC = () => {
       setContentKey(prev => prev + 1);
     }
     
-    if (action) {
-      setActiveAction({ action, timestamp: Date.now() });
-    }
+    setActiveAction(action ? { action, timestamp: Date.now() } : null);
 
   }, [uploadedFiles.length, currentView]);
 
@@ -217,6 +265,10 @@ const App: React.FC = () => {
                   activeAction={activeAction}
                   onActionCompleted={onActionCompleted}
                   onFileUpdate={handleFileUpdate} 
+                  onFileMetadataUpdate={handleFileMetadataUpdate}
+                  historyState={{ past: history.past.length, future: history.future.length }}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
                 />;
       case 'batch':
         return <BatchView files={uploadedFiles} onProcessingComplete={handleProcessingComplete} />;
@@ -287,6 +339,51 @@ const App: React.FC = () => {
         <main key={contentKey} className="flex-1 overflow-auto animate-fade-in" style={{ animation: 'fade-in 0.5s ease-in-out' }}>
             {renderCurrentView()}
         </main>
+      </div>
+
+      <div aria-live="assertive" className="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:p-6 sm:items-start z-[100]">
+        <div className="w-full flex flex-col items-center space-y-4 sm:items-end">
+          {notifications.map((notification) => (
+            <div
+              key={notification.id}
+              className="max-w-sm w-full bg-white dark:bg-slate-800 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 overflow-hidden animate-fade-in-right"
+            >
+              <div className="p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    {notification.type === 'error' ? (
+                      <XCircleIcon className="h-6 w-6 text-red-400" aria-hidden="true" />
+                    ) : (
+                      <InformationCircleIcon className="h-6 w-6 text-cyan-400" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="ml-3 w-0 flex-1 pt-0.5">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {notification.type === 'error' ? 'Chyba při nahrávání' : 'Informace'}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {notification.message}
+                    </p>
+                  </div>
+                  <div className="ml-4 flex-shrink-0 flex">
+                    <button
+                      type="button"
+                      className="bg-white dark:bg-slate-800 rounded-md inline-flex text-slate-400 hover:text-slate-500 dark:hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-fuchsia-500 transition-colors"
+                      onClick={() => {
+                        removeNotification(notification.id);
+                      }}
+                    >
+                      <span className="sr-only">Zavřít</span>
+                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

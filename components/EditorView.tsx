@@ -1,21 +1,60 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { UploadedFile, EditorAction, AnalysisResult } from '../types';
+import type { UploadedFile, EditorAction, AnalysisResult, ManualEdits } from '../types';
 import { analyzeImage, autopilotImage, autoCropImage, removeObject } from '../services/geminiService';
 import { applyEditsToImage } from '../utils/imageProcessor';
-import { UndoIcon } from './icons';
+import { UndoIcon, RedoIcon, ExportIcon, HistoryIcon } from './icons';
 
 interface EditorViewProps {
   files: UploadedFile[];
   activeAction: EditorAction;
   onActionCompleted: () => void;
   onFileUpdate: (fileId: string, newFile: File) => void;
+  onFileMetadataUpdate: (fileId: string, updates: Partial<Omit<UploadedFile, 'file' | 'previewUrl' | 'id'>>) => void;
+  historyState: { past: number, future: number };
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
-const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCompleted, onFileUpdate }) => {
+const INITIAL_EDITS: Omit<ManualEdits, 'crop'> = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  vibrance: 0,
+  shadows: 0,
+  highlights: 0,
+  clarity: 0,
+};
+
+const SliderControl: React.FC<{
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}> = ({ label, value, onChange, min = -100, max = 100, step = 1 }) => (
+    <div>
+        <div className="flex justify-between items-center mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+            <span className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 rounded">{value}</span>
+        </div>
+        <input 
+            type="range" 
+            min={min} 
+            max={max} 
+            step={step}
+            value={value} 
+            onChange={(e) => onChange(Number(e.target.value))} 
+            className="custom-slider" 
+        />
+    </div>
+);
+
+const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCompleted, onFileUpdate, onFileMetadataUpdate, historyState, onUndo, onRedo }) => {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-  const [localFiles, setLocalFiles] = useState<UploadedFile[]>(files);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualEdits, setManualEdits] = useState(INITIAL_EDITS);
 
   const [brushSize, setBrushSize] = useState(40);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -25,32 +64,35 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   const [undoStack, setUndoStack] = useState<ImageData[]>([]);
 
   useEffect(() => {
-    setLocalFiles(files);
     if (files.length > 0 && !files.find(f => f.id === selectedFileId)) {
       setSelectedFileId(files[0].id);
     } else if (files.length === 0) {
       setSelectedFileId(null);
     }
   }, [files, selectedFileId]);
+  
+  useEffect(() => {
+    setManualEdits(INITIAL_EDITS);
+  }, [selectedFileId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (localFiles.length <= 1) return;
+      if (files.length <= 1) return;
 
-      const currentIndex = localFiles.findIndex(f => f.id === selectedFileId);
+      const currentIndex = files.findIndex(f => f.id === selectedFileId);
       if (currentIndex === -1) return;
 
       let nextIndex = -1;
 
       if (e.key === 'ArrowRight') {
-        nextIndex = (currentIndex + 1) % localFiles.length;
+        nextIndex = (currentIndex + 1) % files.length;
       } else if (e.key === 'ArrowLeft') {
-        nextIndex = (currentIndex - 1 + localFiles.length) % localFiles.length;
+        nextIndex = (currentIndex - 1 + files.length) % files.length;
       }
 
       if (nextIndex !== -1) {
         e.preventDefault();
-        setSelectedFileId(localFiles[nextIndex].id);
+        setSelectedFileId(files[nextIndex].id);
       }
     };
 
@@ -58,13 +100,9 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [localFiles, selectedFileId]);
+  }, [files, selectedFileId]);
 
-  const selectedFile = localFiles.find(f => f.id === selectedFileId);
-
-  const updateFileState = useCallback((fileId: string, updates: Partial<UploadedFile>) => {
-    setLocalFiles(prevFiles => prevFiles.map(f => f.id === fileId ? { ...f, ...updates } : f));
-  }, []);
+  const selectedFile = files.find(f => f.id === selectedFileId);
 
   const setupCanvas = useCallback(() => {
     const image = imageRef.current;
@@ -206,16 +244,48 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
       }
   };
 
-  const handleAction = useCallback(async (action: string) => {
+  const handleApplyManualEdits = async () => {
     if (!selectedFile) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const editedBlob = await applyEditsToImage(selectedFile.file, manualEdits);
+      const newFileName = selectedFile.file.name.replace(/\.[^/.]+$/, "") + "_edited.png";
+      const editedFile = new File([editedBlob], newFileName, { type: 'image/png' });
+      onFileUpdate(selectedFile.id, editedFile);
+    } catch (err: any) {
+      setError(err.message || 'Při aplikování úprav došlo k chybě.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!selectedFile) return;
+    const link = document.createElement('a');
+    link.href = selectedFile.previewUrl;
+    link.download = selectedFile.file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  const handleAction = useCallback(async (action: string) => {
+    const isAsyncAutoAction = ['analysis', 'autopilot', 'auto-crop'].includes(action);
+    if (!isAsyncAutoAction) {
+        return;
+    }
+    
+    if (!selectedFile) return;
+
     setIsLoading(true);
     setError(null);
     try {
       switch (action) {
         case 'analysis':
-          updateFileState(selectedFile.id, { isAnalyzing: true, analysis: undefined });
+          onFileMetadataUpdate(selectedFile.id, { isAnalyzing: true, analysis: undefined });
           const analysis = await analyzeImage(selectedFile.file);
-          updateFileState(selectedFile.id, { analysis, isAnalyzing: false });
+          onFileMetadataUpdate(selectedFile.id, { analysis, isAnalyzing: false });
           break;
         case 'autopilot':
           const autopilotEditedFile = await autopilotImage(selectedFile.file);
@@ -227,22 +297,17 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
           const croppedFile = new File([croppedBlob], selectedFile.file.name.replace(/\.[^/.]+$/, "") + "_cropped.png", { type: 'image/png' });
           onFileUpdate(selectedFile.id, croppedFile);
           break;
-        default:
-          setIsLoading(false);
-          return;
       }
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
       if (action === 'analysis') {
-        updateFileState(selectedFile.id, { isAnalyzing: false });
+        onFileMetadataUpdate(selectedFile.id, { isAnalyzing: false });
       }
     } finally {
-      if (action !== 'remove-object') {
         setIsLoading(false);
         onActionCompleted();
-      }
     }
-  }, [selectedFile, updateFileState, onFileUpdate, onActionCompleted]);
+  }, [selectedFile, onFileUpdate, onActionCompleted, onFileMetadataUpdate]);
 
   useEffect(() => {
     if (activeAction) {
@@ -258,7 +323,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
     );
   }
 
-  const renderAnalysis = (analysis: AnalysisResult) => (
+  const renderAnalysisPanel = (analysis: AnalysisResult) => (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h4 className="font-semibold text-slate-800 dark:text-slate-100">Popis</h4>
@@ -290,57 +355,119 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
     </div>
   );
 
-  const renderActivePanel = () => {
-    if (activeAction?.action === 'remove-object') {
-      return (
-        <div className="space-y-6 animate-fade-in">
-          <div>
-            <h4 className="font-semibold text-slate-800 dark:text-slate-100">Odstranit objekt</h4>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Přejeďte štětcem přes oblasti, které chcete odstranit. AI je inteligentně vyplní.
-            </p>
-          </div>
-          <div>
-            <label htmlFor="brush-size" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Velikost štětce: {brushSize}px</label>
-            <input type="range" id="brush-size" min="5" max="150" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="custom-slider" />
-          </div>
-          <div className="flex items-center space-x-3">
-            <button onClick={handleUndoMask} disabled={undoStack.length === 0 || isLoading} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              <UndoIcon className="w-4 h-4 mr-2" />
-              Zpět
+  const renderManualEditPanel = () => (
+    <div className="space-y-4 animate-fade-in">
+        <h4 className="font-semibold text-slate-800 dark:text-slate-100">Manuální úpravy</h4>
+        <SliderControl label="Jas" value={manualEdits.brightness} onChange={v => setManualEdits(e => ({...e, brightness: v}))} />
+        <SliderControl label="Kontrast" value={manualEdits.contrast} onChange={v => setManualEdits(e => ({...e, contrast: v}))} />
+        <SliderControl label="Sytost" value={manualEdits.saturation} onChange={v => setManualEdits(e => ({...e, saturation: v}))} />
+        <div className="pt-4 space-y-3">
+            <button onClick={handleApplyManualEdits} disabled={isLoading} className="aurora-glow w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+                {isLoading ? 'Aplikuji...' : 'Aplikovat úpravy'}
             </button>
-            <button onClick={handleClearMask} disabled={isLoading} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              Vyčistit
+            <button onClick={() => setManualEdits(INITIAL_EDITS)} disabled={isLoading} className="w-full inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+              Resetovat
             </button>
+        </div>
+    </div>
+  );
+
+  const renderHistoryPanel = () => (
+      <div className="space-y-4 animate-fade-in text-center">
+          <HistoryIcon className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500" />
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100">Historie úprav</h4>
+          <div className="flex justify-around items-center bg-slate-100 dark:bg-slate-800/60 p-4 rounded-lg">
+              <div>
+                  <p className="text-2xl font-bold">{historyState.past}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Kroky zpět</p>
+              </div>
+              <div>
+                  <p className="text-2xl font-bold">{historyState.future}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Kroky vpřed</p>
+              </div>
           </div>
-          <button onClick={handleRemoveObject} disabled={isLoading} className="aurora-glow w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
-            {isLoading ? 'Zpracovávám...' : 'Spustit odstranění'}
+          <div className="flex items-center space-x-3 pt-2">
+              <button onClick={onUndo} disabled={historyState.past === 0} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+                  <UndoIcon className="w-4 h-4 mr-2" />
+                  Zpět
+              </button>
+              <button onClick={onRedo} disabled={historyState.future === 0} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+                  <RedoIcon className="w-4 h-4 mr-2" />
+                  Vpřed
+              </button>
+          </div>
+      </div>
+  );
+
+  const renderExportPanel = () => (
+      <div className="space-y-4 animate-fade-in">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100">Exportovat obrázek</h4>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+              Stáhněte si aktuální verzi obrázku do svého počítače.
+          </p>
+          <button onClick={handleDownload} className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 transition transform hover:-translate-y-0.5 active:translate-y-0">
+              <ExportIcon className="w-5 h-5 mr-2" />
+              Stáhnout obrázek
           </button>
-        </div>
-      );
-    }
+      </div>
+  );
 
-    if (selectedFile?.isAnalyzing) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full space-y-2 text-slate-500 dark:text-slate-400">
-            <svg className="animate-spin h-8 w-8 text-fuchsia-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span className="text-lg font-semibold">Analyzuji...</span>
-        </div>
-      );
+  const renderActivePanel = () => {
+    switch (activeAction?.action) {
+      case 'manual-edit':
+        return renderManualEditPanel();
+      case 'export':
+        return renderExportPanel();
+      case 'history':
+        return renderHistoryPanel();
+      case 'remove-object':
+        return (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h4 className="font-semibold text-slate-800 dark:text-slate-100">Odstranit objekt</h4>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Přejeďte štětcem přes oblasti, které chcete odstranit. AI je inteligentně vyplní.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="brush-size" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Velikost štětce: {brushSize}px</label>
+              <input type="range" id="brush-size" min="5" max="150" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="custom-slider" />
+            </div>
+            <div className="flex items-center space-x-3">
+              <button onClick={handleUndoMask} disabled={undoStack.length === 0 || isLoading} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+                <UndoIcon className="w-4 h-4 mr-2" />
+                Zpět
+              </button>
+              <button onClick={handleClearMask} disabled={isLoading} className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+                Vyčistit
+              </button>
+            </div>
+            <button onClick={handleRemoveObject} disabled={isLoading} className="aurora-glow w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+              {isLoading ? 'Zpracovávám...' : 'Spustit odstranění'}
+            </button>
+          </div>
+        );
+      default:
+        if (selectedFile?.isAnalyzing) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full space-y-2 text-slate-500 dark:text-slate-400">
+                <svg className="animate-spin h-8 w-8 text-fuchsia-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span className="text-lg font-semibold">Analyzuji...</span>
+            </div>
+          );
+        }
+        if (selectedFile?.analysis) {
+          return renderAnalysisPanel(selectedFile.analysis);
+        }
+        return <p className="text-sm text-slate-500 dark:text-slate-400">Vyberte nástroj v levém panelu pro zahájení úprav.</p>
     }
-
-    if (selectedFile?.analysis) {
-      return renderAnalysis(selectedFile.analysis);
-    }
-
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Vyberte nástroj pro úpravu obrázku.</p>
   }
 
   return (
     <div className="h-full w-full flex flex-col md:flex-row">
       <div className="w-full md:w-80 lg:w-96 flex-shrink-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shadow-2xl z-10">
         <div className="p-5 border-b border-slate-200/50 dark:border-slate-800/50">
-          <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">AI Nástroje</h3>
+          <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">Ovládací panel</h3>
         </div>
         <div className="flex-1 p-6 overflow-y-auto">
           {error && <div className="p-3 mb-4 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-500/20">{error}</div>}
@@ -382,7 +509,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
         </div>
         <div className="flex-shrink-0 h-40 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-t border-slate-200/50 dark:border-slate-800/50 p-3">
           <div className="h-full flex items-center overflow-x-auto">
-            {localFiles.map(file => (
+            {files.map(file => (
               <div key={file.id} className="p-2 flex-shrink-0 group">
                  <div className={`relative p-1 rounded-xl transition-all duration-300 ${selectedFileId === file.id ? '' : ''}`}>
                     {selectedFileId === file.id && <div className="absolute inset-0 rounded-xl aurora-glow-strong animate-pulse-slow"></div>}
