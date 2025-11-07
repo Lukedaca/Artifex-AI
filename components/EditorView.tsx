@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { UploadedFile, EditorAction, AnalysisResult, ManualEdits } from '../types';
 import { analyzeImage, autopilotImage, autoCropImage, removeObject } from '../services/geminiService';
 import { applyEditsToImage } from '../utils/imageProcessor';
-import { UndoIcon, RedoIcon, ExportIcon, HistoryIcon } from './icons';
+import { UndoIcon, RedoIcon, ExportIcon, HistoryIcon, XIcon } from './icons';
 
 interface EditorViewProps {
   files: UploadedFile[];
@@ -55,6 +55,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualEdits, setManualEdits] = useState(INITIAL_EDITS);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   const [brushSize, setBrushSize] = useState(40);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -101,6 +102,22 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [files, selectedFileId]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            setIsLightboxOpen(false);
+        }
+    };
+
+    if (isLightboxOpen) {
+        window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isLightboxOpen]);
 
   const selectedFile = files.find(f => f.id === selectedFileId);
 
@@ -464,65 +481,93 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   }
 
   return (
-    <div className="h-full w-full flex flex-col md:flex-row">
-      <div className="w-full md:w-80 lg:w-96 flex-shrink-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shadow-2xl z-10">
-        <div className="p-5 border-b border-slate-200/50 dark:border-slate-800/50">
-          <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">Ovládací panel</h3>
+    <>
+      <div className="h-full w-full flex flex-col md:flex-row">
+        <div className="w-full md:w-80 lg:w-96 flex-shrink-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shadow-2xl z-10">
+          <div className="p-5 border-b border-slate-200/50 dark:border-slate-800/50">
+            <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">Ovládací panel</h3>
+          </div>
+          <div className="flex-1 p-6 overflow-y-auto">
+            {error && <div className="p-3 mb-4 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-500/20">{error}</div>}
+            {renderActivePanel()}
+          </div>
         </div>
-        <div className="flex-1 p-6 overflow-y-auto">
-          {error && <div className="p-3 mb-4 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-500/20">{error}</div>}
-          {renderActivePanel()}
-        </div>
-      </div>
-      
-      <div className="flex-1 flex flex-col bg-slate-100/50 dark:bg-slate-950/70 min-w-0">
-        <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
-          {selectedFile && (
-            <>
-              <img 
-                ref={imageRef}
-                src={selectedFile.previewUrl} 
-                alt="Selected" 
-                className={`max-w-full max-h-full object-contain shadow-2xl rounded-xl transition-all duration-300 ${activeAction?.action === 'remove-object' ? 'opacity-90' : ''}`}
-                onLoad={handleImageLoad}
-              />
-              {activeAction?.action === 'remove-object' && (
-                <canvas
-                  ref={maskCanvasRef}
-                  className="absolute cursor-crosshair"
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                />
-              )}
-            </>
-          )}
-          {isLoading && (
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-20">
-              <div className="text-white text-center">
-                <svg className="animate-spin h-10 w-10 mx-auto text-fuchsia-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <p className="mt-3 font-semibold text-lg">Zpracovávám...</p>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex-shrink-0 h-40 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-t border-slate-200/50 dark:border-slate-800/50 p-3">
-          <div className="h-full flex items-center overflow-x-auto">
-            {files.map(file => (
-              <div key={file.id} className="p-2 flex-shrink-0 group">
-                 <div className={`relative p-1 rounded-xl transition-all duration-300 ${selectedFileId === file.id ? '' : ''}`}>
-                    {selectedFileId === file.id && <div className="absolute inset-0 rounded-xl aurora-glow-strong animate-pulse-slow"></div>}
-                    <button onClick={() => setSelectedFileId(file.id)} className={`h-full aspect-video rounded-lg overflow-hidden relative transition-all transform duration-300 ${selectedFileId === file.id ? 'scale-105 shadow-2xl' : 'group-hover:scale-105'}`}>
-                        <img src={file.previewUrl} alt={file.file.name} className="w-full h-full object-cover" />
-                    </button>
+        
+        <div className="flex-1 flex flex-col bg-slate-100/50 dark:bg-slate-950/70 min-w-0">
+          <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
+            {selectedFile && (
+              <>
+                <button
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="max-w-full max-h-full object-contain cursor-zoom-in group focus:outline-none"
+                  aria-label="Zvětšit náhled obrázku"
+                >
+                  <img 
+                    ref={imageRef}
+                    src={selectedFile.previewUrl} 
+                    alt="Selected" 
+                    className={`max-w-full max-h-full object-contain shadow-2xl rounded-xl transition-all duration-300 group-hover:shadow-cyan-500/20 ${activeAction?.action === 'remove-object' ? 'opacity-90' : ''}`}
+                    onLoad={handleImageLoad}
+                  />
+                </button>
+                {activeAction?.action === 'remove-object' && (
+                  <canvas
+                    ref={maskCanvasRef}
+                    className="absolute cursor-crosshair"
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                  />
+                )}
+              </>
+            )}
+            {isLoading && (
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-20">
+                <div className="text-white text-center">
+                  <svg className="animate-spin h-10 w-10 mx-auto text-fuchsia-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  <p className="mt-3 font-semibold text-lg">Zpracovávám...</p>
                 </div>
               </div>
-            ))}
+            )}
+          </div>
+          <div className="flex-shrink-0 h-40 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-t border-slate-200/50 dark:border-slate-800/50 p-3">
+            <div className="h-full flex items-center overflow-x-auto">
+              {files.map(file => (
+                <div key={file.id} className="p-2 flex-shrink-0 group">
+                   <div className={`relative p-1 rounded-xl transition-all duration-300 ${selectedFileId === file.id ? '' : ''}`}>
+                      {selectedFileId === file.id && <div className="absolute inset-0 rounded-xl aurora-glow-strong animate-pulse-slow"></div>}
+                      <button onClick={() => setSelectedFileId(file.id)} className={`h-full aspect-video rounded-lg overflow-hidden relative transition-all transform duration-300 ${selectedFileId === file.id ? 'scale-105 shadow-2xl' : 'group-hover:scale-105'}`}>
+                          <img src={file.previewUrl} alt={file.file.name} className="w-full h-full object-cover" />
+                      </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+      {isLightboxOpen && selectedFile && (
+        <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[101] flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setIsLightboxOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Zvětšený náhled obrázku"
+        >
+            <div className="relative max-w-5xl max-h-[90vh] transition-transform transform scale-95 motion-safe:animate-scale-in" onClick={(e) => e.stopPropagation()}>
+                <img src={selectedFile.previewUrl} alt="Zvětšený náhled" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+                <button 
+                    onClick={() => setIsLightboxOpen(false)}
+                    className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full p-2 text-slate-600 dark:text-slate-300 hover:scale-110 transition-transform shadow-lg focus:outline-none focus:ring-2 focus:ring-white dark:focus:ring-slate-400"
+                    aria-label="Zavřít náhled"
+                >
+                    <XIcon className="w-6 h-6" />
+                </button>
+            </div>
+        </div>
+      )}
+    </>
   );
 };
 
