@@ -9,6 +9,7 @@ import type { UploadedFile, EditorAction, View } from './types';
 import ApiKeyModal from './components/ApiKeyModal';
 import { hasSelectedApiKey } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
+import HomeView from './components/HomeView';
 
 type Theme = 'light' | 'dark';
 
@@ -35,6 +36,7 @@ const App: React.FC = () => {
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
   const [contentKey, setContentKey] = useState(0); // Used to re-trigger animations
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isAppEntered, setIsAppEntered] = useState(false);
 
   const uploadedFiles = history.present;
 
@@ -219,6 +221,12 @@ const App: React.FC = () => {
 
   const handleNavigation = useCallback((payload: { view: View; action?: string }) => {
     const { view, action } = payload;
+    
+    if (view === 'home') {
+      setIsAppEntered(false);
+      return;
+    }
+
     if (view === 'upload') {
       setHistory(h => {
         [...h.past.flat(), ...h.present, ...h.future.flat()].forEach(f => {
@@ -281,6 +289,7 @@ const App: React.FC = () => {
   };
   
   const viewTitles: Record<View, string> = {
+    home: 'Vítejte ve Studiu',
     upload: 'Nahrát fotografie',
     editor: 'Editor & AI Analýza',
     batch: 'Hromadné zpracování',
@@ -302,6 +311,10 @@ const App: React.FC = () => {
         onKeySelectionAttempt={() => setApiKeyModalOpen(false)}
       />
     );
+  }
+
+  if (!isAppEntered) {
+    return <HomeView onEnterApp={() => setIsAppEntered(true)} />;
   }
 
   return (

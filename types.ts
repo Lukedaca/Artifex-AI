@@ -41,4 +41,4 @@ export type EditorAction = {
   timestamp: number;
 } | null;
 
-export type View = 'upload' | 'editor' | 'batch' | 'generate';
+export type View = 'home' | 'upload' | 'editor' | 'batch' | 'generate';

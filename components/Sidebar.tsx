@@ -35,6 +35,7 @@ interface NavItemProps {
 }
 
 const mainTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+  { icon: <LogoIcon className="w-5 h-5 flex-shrink-0" />, label: "Studio", view: "home" },
   { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: "Nahrát fotky", view: "upload" },
   { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: "AI Analýza", view: "editor", action: "analysis" },
   { icon: <ManualEditIcon className="w-5 h-5 flex-shrink-0"/>, label: "Manuální úpravy", view: "editor", action: "manual-edit" },
