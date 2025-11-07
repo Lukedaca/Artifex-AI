@@ -341,7 +341,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   }
 
   const renderAnalysisPanel = (analysis: AnalysisResult) => (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       <div>
         <h4 className="font-semibold text-slate-800 dark:text-slate-100">Popis</h4>
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{analysis.description}</p>
@@ -373,7 +373,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   );
 
   const renderManualEditPanel = () => (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4">
         <h4 className="font-semibold text-slate-800 dark:text-slate-100">Manuální úpravy</h4>
         <SliderControl label="Jas" value={manualEdits.brightness} onChange={v => setManualEdits(e => ({...e, brightness: v}))} />
         <SliderControl label="Kontrast" value={manualEdits.contrast} onChange={v => setManualEdits(e => ({...e, contrast: v}))} />
@@ -390,7 +390,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   );
 
   const renderHistoryPanel = () => (
-      <div className="space-y-4 animate-fade-in text-center">
+      <div className="space-y-4 text-center">
           <HistoryIcon className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500" />
           <h4 className="font-semibold text-slate-800 dark:text-slate-100">Historie úprav</h4>
           <div className="flex justify-around items-center bg-slate-100 dark:bg-slate-800/60 p-4 rounded-lg">
@@ -417,7 +417,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   );
 
   const renderExportPanel = () => (
-      <div className="space-y-4 animate-fade-in">
+      <div className="space-y-4">
           <h4 className="font-semibold text-slate-800 dark:text-slate-100">Exportovat obrázek</h4>
           <p className="text-sm text-slate-600 dark:text-slate-400">
               Stáhněte si aktuální verzi obrázku do svého počítače.
@@ -439,7 +439,7 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
         return renderHistoryPanel();
       case 'remove-object':
         return (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
             <div>
               <h4 className="font-semibold text-slate-800 dark:text-slate-100">Odstranit objekt</h4>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -483,13 +483,15 @@ const EditorView: React.FC<EditorViewProps> = ({ files, activeAction, onActionCo
   return (
     <>
       <div className="h-full w-full flex flex-col md:flex-row">
-        <div className="w-full md:w-80 lg:w-96 flex-shrink-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col shadow-2xl z-10">
+        <div className="w-full md:w-80 lg:w-96 flex-shrink-0 bg-white/60 dark:bg-slate-900/75 backdrop-blur-3xl border-r border-white/10 dark:border-white/5 flex flex-col shadow-2xl z-10">
           <div className="p-5 border-b border-slate-200/50 dark:border-slate-800/50">
             <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">Ovládací panel</h3>
           </div>
           <div className="flex-1 p-6 overflow-y-auto">
             {error && <div className="p-3 mb-4 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-500/20">{error}</div>}
-            {renderActivePanel()}
+            <div key={activeAction?.action || 'default-panel'} className="animate-fade-in-slide-up">
+                {renderActivePanel()}
+            </div>
           </div>
         </div>
         

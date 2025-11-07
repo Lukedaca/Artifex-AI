@@ -138,6 +138,21 @@
     .animate-fade-in-up {
       animation: fade-in-up 0.6s ease-out forwards;
     }
+    
+    /* Animation for Editor Panel Content */
+    @keyframes fade-in-slide-up {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-fade-in-slide-up {
+      animation: fade-in-slide-up 0.4s ease-out forwards;
+    }
 
     .animate-pulse-slow {
         animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;

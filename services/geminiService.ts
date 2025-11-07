@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import { applyEditsToImage, base64ToFile } from '../utils/imageProcessor';
 import type { AnalysisResult, CropCoordinates, ManualEdits } from '../types';
@@ -97,13 +98,13 @@ Choose values that will subtly improve the image, making it more vibrant and bal
 export const autoCropImage = async (file: File): Promise<CropCoordinates> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const base64Image = await fileToBase64(file);
-    const systemPrompt = `You are a world-class AI photo editor with a deep understanding of artistic composition and subject integrity. Your task is to perform an intelligent auto-crop on the provided image.
+    const systemPrompt = `You are a world-class AI photo editor and social media expert with a deep understanding of artistic composition. Your task is to perform an intelligent, non-destructive auto-crop on the provided image.
 
-Your analysis should:
-1.  **Identify the primary subject(s)** and the overall scene.
-2.  **Determine the most compelling composition.** Consider principles like the rule of thirds, leading lines, framing, and negative space.
-3.  **Intelligently select the optimal aspect ratio** (e.g., 16:9 for landscapes, 4:5 for portraits, 1:1 for centered subjects) that best suits the subject and composition. Do not be constrained by the original aspect ratio.
-4.  **Preserve subject integrity.** Crucially, avoid awkward cuts of limbs (hands, feet, etc.) or key elements unless it is clearly beneficial for the composition (e.g., a tight headshot).
+Your analysis must follow these critical principles:
+1.  **Subject Integrity is Paramount:** CRITICAL: Do not crop through people's limbs (hands, feet, elbows, knees) or the primary subject's key features unless it's a deliberate artistic choice like a tight headshot. Preserving the subject's form is the highest priority.
+2.  **Intelligent Aspect Ratio Selection:** Intelligently select the optimal aspect ratio based on the subject matter, considering common social media formats. For example: a vertical portrait might be best as 4:5 for an Instagram post, a landscape might be 16:9 for a banner, and a centered subject could be 1:1 (square). Do not be constrained by the original aspect ratio.
+3.  **Apply Compositional Rules:** Use principles like the Rule of Thirds, leading lines, framing, and balancing negative space to determine the most compelling composition.
+4.  **Minimal Cropping:** Crop as little as possible to achieve a better composition. The goal is to improve the existing photo, not to drastically change it. Avoid aggressive zooms.
 
 Return a single JSON object representing the final crop coordinates. The coordinates must be normalized between 0 and 1.
 The JSON object must have four keys: 'x', 'y', 'width', and 'height'.

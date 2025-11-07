@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import type { EditorAction, View } from '../types';
 import {
   UploadIcon,
@@ -31,7 +31,6 @@ interface NavItemProps {
   onClick: () => void;
   isCollapsed: boolean;
   isActive: boolean;
-  itemRef: React.RefObject<HTMLButtonElement>;
 }
 
 const mainTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
@@ -51,9 +50,8 @@ const aiTools: {icon: React.ReactNode, label: string, view: View, action?: strin
   { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor", action: "history" },
 ];
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive, itemRef }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
   <button 
-    ref={itemRef}
     onClick={onClick} 
     className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-slate-500/10 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-4 px-4 py-2.5'} ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`} 
     title={isCollapsed ? label : undefined}
@@ -64,39 +62,6 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, is
 );
 
 const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, currentView, activeAction }: SidebarProps) => {
-  const [activePillStyle, setActivePillStyle] = useState({});
-  const mainNavRef = useRef<HTMLDivElement>(null);
-  const aiNavRef = useRef<HTMLDivElement>(null);
-  const mainItemRefs = useRef<React.RefObject<HTMLButtonElement>[]>(mainTools.map(() => React.createRef()));
-  const aiItemRefs = useRef<React.RefObject<HTMLButtonElement>[]>(aiTools.map(() => React.createRef()));
-
-  useEffect(() => {
-    const mainToolIndex = mainTools.findIndex(item => item.view === currentView && (item.action ? item.action === activeAction?.action : activeAction === null));
-    const aiToolIndex = aiTools.findIndex(item => item.view === currentView && (item.action ? item.action === activeAction?.action : !activeAction));
-
-    let activeRef: React.RefObject<HTMLButtonElement> | undefined;
-    let parentRef: React.RefObject<HTMLDivElement> | undefined;
-
-    if (mainToolIndex !== -1) {
-      activeRef = mainItemRefs.current[mainToolIndex];
-      parentRef = mainNavRef;
-    } else if (aiToolIndex !== -1) {
-      activeRef = aiItemRefs.current[aiToolIndex];
-      parentRef = aiNavRef;
-    }
-
-    if (activeRef?.current && parentRef?.current) {
-        const { offsetTop, offsetHeight } = activeRef.current;
-        setActivePillStyle({
-            transform: `translateY(${offsetTop}px)`,
-            height: `${offsetHeight}px`,
-            opacity: 1,
-        });
-    } else {
-        setActivePillStyle({ opacity: 0 });
-    }
-  }, [currentView, activeAction, isCollapsed]);
-
 
   const handleNavigation = (payload: { view: View; action?: string }) => {
     onNavigate(payload);
@@ -125,12 +90,11 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
             <div>
               {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">Hlavní nástroje</h2>}
               {isCollapsed && <hr className="mb-4 border-slate-200/80 dark:border-slate-700/80" />}
-              <div ref={mainNavRef} className="space-y-1.5 relative">
-                <div className="absolute left-0 w-full rounded-lg bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-all duration-300 ease-in-out" style={activePillStyle}></div>
-                {mainTools.map((item, index) => {
+              <div className="space-y-1.5 relative">
+                {mainTools.map((item) => {
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : activeAction === null);
                   return (
-                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} itemRef={mainItemRefs.current[index]}/>
+                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} />
                   );
                 })}
               </div>
@@ -138,13 +102,13 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
             <div>
               {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">AI nástroje</h2>}
               {isCollapsed && <hr className="my-4 border-slate-200/80 dark:border-slate-700/80" />}
-              <div ref={aiNavRef} className="space-y-1.5 relative">
-                {aiTools.map((item, index) => {
+              <div className="space-y-1.5 relative">
+                {aiTools.map((item) => {
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : !activeAction);
                   return (
-                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive} itemRef={aiItemRefs.current[index]}/>
+                    <NavItem key={item.label} icon={item.icon} label={item.label} onClick={() => handleNavigation({ view: item.view, action: item.action })} isCollapsed={isCollapsed} isActive={isActive}/>
                   );
-})}
+                })}
               </div>
             </div>
           </nav>
