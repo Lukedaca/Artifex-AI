@@ -1,4 +1,5 @@
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
+// FIX: Corrected import path for imageProcessor to be a relative path.
 import { applyEditsToImage, base64ToFile, resizeImageForAnalysis } from '../utils/imageProcessor';
 import type { AnalysisResult, CropCoordinates, ManualEdits, UserProfile, AutopilotTendencies } from '../types';
 import { getUserProfile } from "./userProfileService";

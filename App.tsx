@@ -1,426 +1,314 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import Sidebar from './components/Sidebar';
+import React, { useState, useEffect, useCallback, useReducer } from 'react';
+
+// Views
+import HomeView from './components/HomeView';
 import UploadView from './components/UploadView';
 import EditorView from './components/EditorView';
 import BatchView from './components/BatchView';
 import GenerateImageView from './components/GenerateImageView';
-import { MenuIcon, MoonIcon, SunIcon, KeyIcon, XCircleIcon, InformationCircleIcon } from './components/icons';
-import type { UploadedFile, EditorAction, View, History, HistoryEntry } from './types';
+
+// Components
+import Sidebar from './components/Sidebar';
 import ApiKeyModal from './components/ApiKeyModal';
+import { XCircleIcon } from './components/icons';
+
+// Types
+import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } from './types';
+
+// Utils & Services
 import { hasSelectedApiKey } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
-import HomeView from './components/HomeView';
+import { getPresets } from './services/userProfileService';
 
-type Theme = 'light' | 'dark';
+
+// --- History Reducer ---
+// This will handle undo/redo for the file list
+const initialHistoryState: History = {
+  past: [],
+  present: { state: [], actionName: 'Initial State' },
+  future: [],
+};
+
+function historyReducer(state: History, action: { type: 'SET'; payload: HistoryEntry } | { type: 'UNDO' } | { type: 'REDO' }) {
+    const { past, present, future } = state;
+    switch (action.type) {
+        case 'SET':
+            if (action.payload.state === present.state) {
+                return state;
+            }
+            return {
+                past: [...past, present],
+                present: action.payload,
+                future: [],
+            };
+        case 'UNDO':
+            if (past.length === 0) return state;
+            const previous = past[past.length - 1];
+            const newPast = past.slice(0, past.length - 1);
+            return {
+                past: newPast,
+                present: previous,
+                future: [present, ...future],
+            };
+        case 'REDO':
+            if (future.length === 0) return state;
+            const next = future[0];
+            const newFuture = future.slice(1);
+            return {
+                past: [...past, present],
+                present: next,
+                future: newFuture,
+            };
+        default:
+            return state;
+    }
+}
 
 interface Notification {
   id: number;
   message: string;
-  type: 'error' | 'info';
+  type: 'info' | 'error';
 }
 
-const getInitialHistory = (): History => ({
-  past: [],
-  present: { state: [], actionName: 'Start' },
-  future: [],
-});
+const getInitialTheme = (): boolean => {
+    const savedTheme = localStorage.getItem('artifex-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return savedTheme === 'dark' || (!savedTheme && prefersDark);
+};
 
-const App: React.FC = () => {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [currentView, setCurrentView] = useState<View>('home');
-  const [history, setHistory] = useState<History>(getInitialHistory());
-  const [theme, setTheme] = useState<Theme>('dark');
+
+function App() {
+  const [view, setView] = useState<View>('home');
+  const [history, dispatchHistory] = useReducer(historyReducer, initialHistoryState);
+  const { present: { state: files } } = history;
+
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
-  const [isApiKeyModalOpen, setApiKeyModalOpen] = useState(false);
-  const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
-  const [contentKey, setContentKey] = useState(0); // Used to re-trigger animations
+
+  const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [apiKeyChecked, setApiKeyChecked] = useState(false);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isAppEntered, setIsAppEntered] = useState(false);
+  const [userPresets, setUserPresets] = useState<Preset[]>([]);
 
-  const uploadedFiles = history.present.state;
 
-  const removeNotification = (id: number) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-  
-  const addNotification = useCallback((message: string, type: 'error' | 'info' = 'info') => {
-    const id = Date.now() + Math.random();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      removeNotification(id);
-    }, 6000);
-  }, []);
+  // --- Effects ---
 
-  const checkKeyAndSetModal = useCallback(async () => {
-    setIsCheckingApiKey(true);
-    try {
-      const hasKey = await hasSelectedApiKey();
-      setApiKeyModalOpen(!hasKey);
-    } catch (e) {
-      console.error("Error checking for API key:", e);
-      setApiKeyModalOpen(true);
-    } finally {
-      setIsCheckingApiKey(false);
-    }
-  }, []);
-
+  // Check for saved theme preference
   useEffect(() => {
-    if(!isAppEntered) return;
-    checkKeyAndSetModal();
-  }, [isAppEntered, checkKeyAndSetModal]);
-
-  const updateHistory = (newPresentState: UploadedFile[], actionName: string) => {
-    setHistory(h => ({
-      past: [...h.past, h.present],
-      present: { state: newPresentState, actionName },
-      future: []
-    }));
-  };
-
-  const handleUndo = useCallback(() => {
-    setHistory(h => {
-      if (h.past.length === 0) return h;
-      const previous = h.past[h.past.length - 1];
-      const newPast = h.past.slice(0, h.past.length - 1);
-      return {
-        past: newPast,
-        present: previous,
-        future: [h.present, ...h.future],
-      };
-    });
-  }, []);
-  
-  const handleRedo = useCallback(() => {
-    setHistory(h => {
-      if (h.future.length === 0) return h;
-      const next = h.future[0];
-      const newFuture = h.future.slice(1);
-      return {
-        past: [...h.past, h.present],
-        present: next,
-        future: newFuture,
-      };
-    });
-  }, []);
-
-  const jumpToState = useCallback((index: number) => {
-    setHistory(h => {
-      const newPast = h.past.slice(0, index);
-      const stateToJumpTo = h.past[index];
-      const newFuture = [...h.past.slice(index + 1), h.present, ...h.future];
-      return {
-        past: newPast,
-        present: stateToJumpTo,
-        future: newFuture,
-      };
-    });
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey)) {
-        if (e.key === 'z') {
-          e.preventDefault();
-          handleUndo();
-        } else if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) {
-          e.preventDefault();
-          handleRedo();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleUndo, handleRedo]);
-
-  useEffect(() => {
-    if (theme === 'dark') {
+    if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [theme]);
-  
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
+  }, [isDarkMode]);
+
+  // API Key Check
+  useEffect(() => {
+    if (view === 'home' || apiKeyChecked) return;
+    const checkKey = async () => {
+        const hasKey = await hasSelectedApiKey();
+        if (!hasKey) {
+            setIsApiKeyModalOpen(true);
+        }
+        setApiKeyChecked(true); // only check once per session
+    };
+    checkKey();
+  }, [view, apiKeyChecked]);
+
+  // Load presets
+  useEffect(() => {
+      setUserPresets(getPresets());
+  }, []);
+
+  // --- Handlers ---
+
+  const setFiles = useCallback((newState: UploadedFile[] | ((prevState: UploadedFile[]) => UploadedFile[]), actionName: string) => {
+    const newFiles = typeof newState === 'function' ? newState(files) : newState;
+    dispatchHistory({ type: 'SET', payload: { state: newFiles, actionName } });
+    if (newFiles.length > 0 && (!activeFileId || !newFiles.find(f => f.id === activeFileId))) {
+      setActiveFileId(newFiles[0].id);
+    }
+    if (newFiles.length === 0) {
+      setActiveFileId(null);
+    }
+  }, [files, activeFileId]);
+
+  const addNotification = useCallback((message: string, type: 'info' | 'error' = 'info') => {
+    const id = Date.now();
+    setNotifications(n => [...n, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(n => n.filter(notif => notif.id !== id));
+    }, 5000);
+  }, []);
+
+  const handleToggleTheme = () => {
+    setIsDarkMode(prev => {
+      const newIsDark = !prev;
+      localStorage.setItem('artifex-theme', newIsDark ? 'dark' : 'light');
+      return newIsDark;
+    });
   };
   
-  const toggleSidebarCollapse = () => {
-    setSidebarCollapsed(prev => !prev);
-  }
+  const handleToggleSidebar = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
 
-  const handleFileSelection = useCallback(async (files: File[]) => {
-    const newFilesPromises: Promise<UploadedFile | null>[] = files.map(file => {
-      return normalizeImageFile(file)
-        .then(normalizedFile => {
-          const objectUrl = URL.createObjectURL(normalizedFile);
-          return {
-            id: `${normalizedFile.name}-${normalizedFile.lastModified}-${Math.random()}`,
-            file: normalizedFile,
-            previewUrl: objectUrl,
-            originalPreviewUrl: objectUrl,
-          };
-        })
-        .catch(error => {
-          console.error(`Chyba při zpracování souboru ${file.name}:`, error);
-          addNotification(`Chyba u '${file.name}': ${error.message}`, 'error');
-          return null;
-        });
-    });
-
-    const settledFiles = await Promise.all(newFilesPromises);
-    const newFiles = settledFiles.filter((f): f is UploadedFile => f !== null);
-
-    if (newFiles.length === 0) {
-      return;
+  const handleNavigate = useCallback(({ view: newView, action }: { view: View; action?: string }) => {
+    if (newView === 'editor' && files.length === 0 && action) {
+        addNotification('Nejprve prosím nahrajte obrázek.', 'error');
+        return;
     }
-    
-    setHistory(h => {
-      [...h.past, h.present, ...h.future].forEach(entry => 
-          entry.state.forEach(f => {
-              if (f.previewUrl && f.previewUrl !== f.originalPreviewUrl) URL.revokeObjectURL(f.previewUrl);
-              if (f.originalPreviewUrl) URL.revokeObjectURL(f.originalPreviewUrl);
-          })
-      );
-      return { past: [], present: { state: newFiles, actionName: 'Nahrání obrázků' }, future: [] };
+    setView(newView);
+    if (action) {
+      setActiveAction({ action, timestamp: Date.now() });
+    } else {
+      setActiveAction(null);
+    }
+  }, [files.length, addNotification]);
+
+  const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
+    const validFiles: UploadedFile[] = [];
+    const promises = selectedFiles.map(async file => {
+      try {
+        const normalizedFile = await normalizeImageFile(file);
+        const previewUrl = URL.createObjectURL(normalizedFile);
+        validFiles.push({
+          id: `${Date.now()}-${Math.random()}`,
+          file: normalizedFile,
+          previewUrl: previewUrl,
+          originalPreviewUrl: previewUrl,
+        });
+      } catch (error) {
+        addNotification(`Soubor ${file.name} není podporován.`, 'error');
+      }
     });
-    setCurrentView('editor');
-    setActiveAction(null);
-    setContentKey(prev => prev + 1);
+
+    await Promise.all(promises);
+
+    if (validFiles.length > 0) {
+      setFiles(
+        currentFiles => [...currentFiles, ...validFiles],
+        `Nahráno ${validFiles.length} souborů`
+      );
+      setView('editor');
+    }
+  }, [addNotification, setFiles]);
+
+  const handleImageGenerated = useCallback((file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    const newFile: UploadedFile = {
+      id: `${Date.now()}-${Math.random()}`,
+      file: file,
+      previewUrl: previewUrl,
+      originalPreviewUrl: previewUrl,
+    };
+    setFiles(currentFiles => [...currentFiles, newFile], 'Generován obrázek');
+    setView('editor');
+    addNotification('Obrázek byl úspěšně vygenerován a přidán do projektu.', 'info');
+  }, [addNotification, setFiles]);
+
+  const handleBatchComplete = useCallback((updatedFiles: { id: string; file: File }[]) => {
+    const updatedFilesMap = new Map(updatedFiles.map(f => [f.id, f]));
+    setFiles(
+      currentFiles => currentFiles.map(cf => {
+        if (updatedFilesMap.has(cf.id)) {
+          const newFile = updatedFilesMap.get(cf.id)!;
+          // Clean up old object URL
+          URL.revokeObjectURL(cf.previewUrl);
+          // FIX: The 'newFile' variable is an object {id: string, file: File}.
+          // URL.createObjectURL expects a File/Blob, not the wrapper object.
+          // The `file` property of the new state should also be the File object itself.
+          return { ...cf, file: newFile.file, previewUrl: URL.createObjectURL(newFile.file) };
+        }
+        return cf;
+      }),
+      'Batch úpravy'
+    );
+    setView('editor');
+  }, [setFiles]);
+
+  const handleKeySelectionAttempt = useCallback(async () => {
+    setIsApiKeyModalOpen(false);
+    const hasKey = await hasSelectedApiKey();
+    if (!hasKey) {
+      setTimeout(() => {
+          addNotification('Pro plnou funkčnost je potřeba vybrat API klíč.', 'error');
+          setIsApiKeyModalOpen(true);
+      }, 500); // Re-open if they closed without selecting
+    }
   }, [addNotification]);
   
-  const handleFileUpdate = useCallback((fileId: string, newFile: File, actionName: string) => {
-    const newPresentState = history.present.state.map(f => {
-      if (f.id === fileId) {
-        if(f.previewUrl !== f.originalPreviewUrl) URL.revokeObjectURL(f.previewUrl);
-        return {
-          ...f,
-          file: newFile,
-          previewUrl: URL.createObjectURL(newFile),
-          analysis: undefined,
-          isAnalyzing: false,
-        };
-      }
-      return f;
-    });
-    updateHistory(newPresentState, actionName);
-  }, [history.present.state]);
+  const getPageTitle = () => {
+      if (view === 'upload') return 'Nahrát fotky';
+      if (view === 'editor') return 'Editor & AI Analýza';
+      if (view === 'batch') return 'Hromadné zpracování';
+      if (view === 'generate') return 'Generátor obrázků';
+      return 'Dashboard';
+  }
 
-  const handleFileMetadataUpdate = useCallback((fileId: string, updates: Partial<Omit<UploadedFile, 'file' | 'previewUrl' | 'id' | 'originalPreviewUrl'>>) => {
-      setHistory(h => {
-          const newPresentState = h.present.state.map(f => {
-              if (f.id === fileId) {
-                  return { ...f, ...updates };
-              }
-              return f;
-          });
-          // Do not create a new history entry for metadata changes like analysis results
-          return { ...h, present: { ...h.present, state: newPresentState } };
-      });
-  }, []);
-  
-  const handleImageGenerated = useCallback((file: File, actionName: string) => {
-    const objectUrl = URL.createObjectURL(file);
-    const newFile: UploadedFile = {
-      id: `${file.name}-${file.lastModified}-${Math.random()}`,
-      file,
-      previewUrl: objectUrl,
-      originalPreviewUrl: objectUrl,
+  const renderView = () => {
+    const headerProps = {
+        title: getPageTitle(),
+        isDarkMode: isDarkMode,
+        onToggleTheme: handleToggleTheme,
+        onOpenApiKeyModal: () => setIsApiKeyModalOpen(true),
+        onToggleSidebar: handleToggleSidebar,
     };
-    
-    const newPresentState = [...history.present.state, newFile];
-    updateHistory(newPresentState, actionName);
-    setCurrentView('editor');
-    setContentKey(prev => prev + 1);
-  }, [history.present.state]);
 
-  const handleNavigation = useCallback((payload: { view: View; action?: string }) => {
-    const { view, action } = payload;
-    
-    if (view === 'home') {
-      setIsAppEntered(false);
-      setCurrentView('home');
-      return;
-    }
-
-    if (view === 'upload') {
-      setHistory(getInitialHistory());
-    }
-    
-    if ((view === 'editor' || view === 'batch') && uploadedFiles.length === 0) {
-      addNotification('Nejprve prosím nahrajte nějaké obrázky.', 'info');
-      setCurrentView('upload');
-      setContentKey(prev => prev + 1);
-      return;
-    }
-    
-    if (currentView !== view) {
-      setCurrentView(view);
-      setContentKey(prev => prev + 1);
-    }
-    
-    setActiveAction(action ? { action, timestamp: Date.now() } : null);
-
-  }, [uploadedFiles.length, currentView, addNotification]);
-
-  const handleProcessingComplete = (newFiles: UploadedFile[], actionName: string) => {
-    updateHistory(newFiles, actionName);
-    setCurrentView('editor');
-    setContentKey(prev => prev + 1);
-  };
-  
-  const onActionCompleted = () => {
-    setActiveAction(null);
-  };
-  
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'editor':
-        return <EditorView 
-                  files={uploadedFiles} 
-                  activeAction={activeAction}
-                  onActionCompleted={onActionCompleted}
-                  onFileUpdate={handleFileUpdate} 
-                  onFileMetadataUpdate={handleFileMetadataUpdate}
-                  history={{
-                    log: [ ...history.past, history.present],
-                    canUndo: history.past.length > 0,
-                    canRedo: history.future.length > 0,
-                  }}
-                  onUndo={handleUndo}
-                  onRedo={handleRedo}
-                  onJumpToState={jumpToState}
-                  addNotification={addNotification}
-                  onNavigate={handleNavigation}
-                />;
-      case 'batch':
-        return <BatchView files={uploadedFiles} onProcessingComplete={handleProcessingComplete} />;
-      case 'generate':
-        return <GenerateImageView onImageGenerated={(file) => handleImageGenerated(file, 'Generování obrázku')} />;
+    switch (view) {
+      case 'home':
+        return <HomeView onEnterApp={() => setView('upload')} />;
       case 'upload':
+        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
+      case 'editor':
+        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} />;
+      case 'batch':
+        return <BatchView {...headerProps} files={files} onBatchComplete={handleBatchComplete} addNotification={addNotification} />;
+      case 'generate':
+        return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} />;
       default:
-        return <UploadView onFilesSelected={handleFileSelection} />;
+        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
     }
   };
-  
-  const viewTitles: Record<View, string> = {
-    home: 'Vítejte ve Studiu',
-    upload: 'Nahrát fotografie',
-    editor: 'Editor & AI Analýza',
-    batch: 'Hromadné zpracování',
-    generate: 'Vytvořit obrázek AI',
-  };
 
-  if (isCheckingApiKey && isAppEntered) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
-        <svg className="animate-spin h-10 w-10 text-fuchsia-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-      </div>
-    );
-  }
-
-  if (isApiKeyModalOpen) {
-    return (
-       <ApiKeyModal 
-        isOpen={isApiKeyModalOpen}
-        onKeySelectionAttempt={checkKeyAndSetModal}
-      />
-    );
-  }
-
-  if (!isAppEntered) {
-    return <HomeView onEnterApp={() => {
-      setIsAppEntered(true);
-      setCurrentView('upload');
-    }} />;
+  if (view === 'home') {
+    return <HomeView onEnterApp={() => setView('upload')} />;
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-300 overflow-hidden">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
-        onNavigate={handleNavigation}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={toggleSidebarCollapse}
-        currentView={currentView}
-        activeAction={activeAction}
-      />
-      
-      <div className={`flex-1 flex flex-col min-w-0 h-full transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
-        <header className="flex-shrink-0 flex items-center justify-between h-20 px-4 md:px-6 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl z-10">
-          <div className="flex items-center space-x-4">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-colors">
-                <MenuIcon className="w-6 h-6" />
-            </button>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 hidden sm:block">
-              {viewTitles[currentView]}
-            </h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button onClick={toggleTheme} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all" title="Změnit téma">
-                {theme === 'dark' ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
-            </button>
-            <button onClick={() => setApiKeyModalOpen(true)} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all" title="Zadat API klíč">
-                <KeyIcon className="w-6 h-6" />
-            </button>
-          </div>
-        </header>
-
-        <main key={contentKey} className="flex-1 overflow-auto animate-fade-in" style={{ animation: 'fade-in 0.5s ease-in-out' }}>
-            {renderCurrentView()}
+    <div className={`h-screen w-screen overflow-hidden flex font-sans bg-slate-100 dark:bg-slate-950 transition-colors duration-300`}>
+        <Sidebar 
+            isOpen={isSidebarOpen}
+            isCollapsed={isSidebarCollapsed}
+            onClose={() => setIsSidebarOpen(false)}
+            onNavigate={handleNavigate}
+            onToggleCollapse={() => setIsSidebarCollapsed(p => !p)}
+            currentView={view}
+            activeAction={activeAction}
+        />
+        <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
+            {renderView()}
         </main>
-      </div>
+        
+        <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
 
-      <div aria-live="assertive" className="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:p-6 sm:items-start z-[100]">
-        <div className="w-full flex flex-col items-center space-y-4 sm:items-end">
-          {notifications.map((notification) => (
-            <div
-              key={notification.id}
-              className="max-w-sm w-full bg-white dark:bg-slate-800 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 dark:ring-white dark:ring-opacity-10 overflow-hidden animate-fade-in-right"
-            >
-              <div className="p-4">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    {notification.type === 'error' ? (
-                      <XCircleIcon className="h-6 w-6 text-red-400" aria-hidden="true" />
-                    ) : (
-                      <InformationCircleIcon className="h-6 w-6 text-cyan-400" aria-hidden="true" />
-                    )}
-                  </div>
-                  <div className="ml-3 w-0 flex-1 pt-0.5">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {notification.type === 'error' ? 'Chyba' : 'Informace'}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {notification.message}
-                    </p>
-                  </div>
-                  <div className="ml-4 flex-shrink-0 flex">
-                    <button
-                      type="button"
-                      className="bg-white dark:bg-slate-800 rounded-md inline-flex text-slate-400 hover:text-slate-500 dark:hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-fuchsia-500 transition-colors"
-                      onClick={() => {
-                        removeNotification(notification.id);
-                      }}
-                    >
-                      <span className="sr-only">Zavřít</span>
-                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
+        <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
+            {notifications.map(n => (
+                <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-800 dark:text-cyan-200'}`}>
+                    <span className="flex-1">{n.message}</span>
+                    <button onClick={() => setNotifications(current => current.filter(notif => notif.id !== n.id))} className="ml-4 -mr-1 p-1 rounded-full hover:bg-black/10">
+                        <XCircleIcon className="w-5 h-5" />
                     </button>
-                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
-      </div>
     </div>
   );
-};
+}
 
 export default App;

@@ -15,7 +15,7 @@ import {
   ChevronDoubleLeftIcon,
   StyleTransferIcon,
   BackgroundReplacementIcon,
-  PresetIcon
+  PresetIcon,
 } from './icons';
 
 interface SidebarProps {

@@ -8,6 +8,13 @@ export const UploadIcon = (props: IconProps) => (
   </svg>
 );
 
+// FIX: Add missing ArrowPathIcon to resolve import error.
+export const ArrowPathIcon = (props: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-4.991-2.696a8.25 8.25 0 00-11.664 0l-3.181 3.183" />
+  </svg>
+);
+
 export const AnalysisIcon = (props: IconProps) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.962 3.962a2.25 2.25 0 013.184 0l4.5 4.5a2.25 2.25 0 010 3.184l-4.5 4.5a2.25 2.25 0 01-3.184 0l-4.5-4.5a2.25 2.25 0 010-3.184l4.5-4.5zM21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
