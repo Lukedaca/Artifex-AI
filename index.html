@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs" class="dark">
+<html lang="cs">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,15 +7,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com?v=3.1"></script>
   <style>
     body {
       margin: 0;
       font-family: 'Inter', sans-serif;
-      background-color: #f1f5f9;
-    }
-    html.dark body {
-      background-color: #020617; 
+      /* Background is now controlled by the App component for consistency */
     }
     .noise-bg {
       position: relative;
@@ -78,17 +75,12 @@
       appearance: none;
       width: 20px;
       height: 20px;
-      background: #fff;
-      border: 2px solid #06b6d4; /* cyan-500 */
+      background: #1e293b; /* slate-800 */
+      border: 2px solid #a855f7; /* fuchsia-500 */
       border-radius: 50%;
       cursor: pointer;
       transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #06b6d4;
-    }
-    .dark .custom-slider::-webkit-slider-thumb {
-        background: #1e293b; /* slate-800 */
-        border-color: #a855f7; /* fuchsia-500 */
-        box-shadow: 0 0 10px -2px #a855f7;
+      box-shadow: 0 0 10px -2px #a855f7;
     }
     .custom-slider::-webkit-slider-thumb:hover {
         transform: scale(1.1);
@@ -96,17 +88,20 @@
      .custom-slider::-moz-range-thumb {
       width: 20px;
       height: 20px;
-      background: #fff;
-      border: 2px solid #06b6d4; /* cyan-500 */
+      background: #1e293b; /* slate-800 */
+      border: 2px solid #a855f7; /* fuchsia-500 */
       border-radius: 50%;
       cursor: pointer;
       transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #06b6d4;
+      box-shadow: 0 0 10px -2px #a855f7;
     }
-    .dark .custom-slider::-moz-range-thumb {
-        background: #1e293b; /* slate-800 */
-        border-color: #a855f7; /* fuchsia-500 */
-        box-shadow: 0 0 10px -2px #a855f7;
+
+    /* Editor View Grid Pattern */
+    .bg-grid-pattern {
+        background-image: 
+            linear-gradient(rgba(71, 85, 105, 0.5) 1px, transparent 1px),
+            linear-gradient(to right, rgba(71, 85, 105, 0.5) 1px, transparent 1px);
+        background-size: 2rem 2rem;
     }
 
     /* Animation for Notifications */

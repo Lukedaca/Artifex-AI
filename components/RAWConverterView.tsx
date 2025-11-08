@@ -136,8 +136,8 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({ addNotification }) 
          return (
              <div className="h-full w-full flex flex-col items-center justify-center text-center p-8">
                  <XCircleIcon className="w-16 h-16 text-red-400 mb-4"/>
-                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Konvertor se nepodařilo načíst</h2>
-                 <p className="mt-2 max-w-lg text-slate-500 dark:text-slate-400">
+                 <h2 className="text-2xl font-bold text-slate-100">Konvertor se nepodařilo načíst</h2>
+                 <p className="mt-2 max-w-lg text-slate-400">
                      Externí knihovna potřebná pro převod RAW souborů nemohla být načtena. To může být způsobeno problémy se sítí nebo doplňkem pro blokování skriptů. Zkuste prosím obnovit stránku.
                  </p>
              </div>
@@ -148,27 +148,27 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({ addNotification }) 
         <div className="h-full w-full flex flex-col items-center p-4 sm:p-8">
             <div className="w-full max-w-5xl">
                 <div className="text-center mb-10">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Převodník z RAW do JPEG</h1>
-                    <p className="mt-3 text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">Převodník z RAW do JPEG</h1>
+                    <p className="mt-3 text-xl text-slate-400 max-w-3xl mx-auto">
                         Nahrajte své RAW fotografie a my je převedeme na vysoce kvalitní JPEG, který můžete dále upravovat v Artifexu.
                     </p>
                 </div>
 
-                <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-8 rounded-2xl shadow-lg border border-slate-200/50 dark:border-slate-800/50">
+                <div className="bg-slate-900/60 backdrop-blur-xl p-8 rounded-2xl shadow-lg border border-slate-800/50">
                     {convertedFiles.length === 0 ? (
                         <div 
                             onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
                             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                             onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
                             onDrop={handleDrop}
-                            className={`p-10 border-2 border-dashed rounded-xl transition-colors ${isDragging ? 'border-cyan-500 bg-cyan-500/10' : 'border-slate-300 dark:border-slate-700'}`}
+                            className={`p-10 border-2 border-dashed rounded-xl transition-colors ${isDragging ? 'border-cyan-500 bg-cyan-500/10' : 'border-slate-700'}`}
                         >
                             <div className="text-center">
-                                <UploadIcon className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" />
-                                <p className="mt-4 font-semibold text-slate-700 dark:text-slate-300">
+                                <UploadIcon className="mx-auto h-12 w-12 text-slate-500" />
+                                <p className="mt-4 font-semibold text-slate-300">
                                     {rawFiles.length > 0 ? `${rawFiles.length} souborů vybráno` : "Přetáhněte soubory sem"}
                                 </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">nebo klikněte pro výběr</p>
+                                <p className="text-sm text-slate-400">nebo klikněte pro výběr</p>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -180,7 +180,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({ addNotification }) 
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 rounded-md hover:bg-cyan-500/10 transition-colors"
+                                    className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-400 rounded-md hover:bg-cyan-500/10 transition-colors"
                                 >
                                     {rawFiles.length > 0 ? "Vybrat jiné" : "Vybrat soubory"}
                                 </button>
@@ -218,14 +218,14 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({ addNotification }) 
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <button
                                     onClick={() => { setRawFiles([]); setConvertedFiles([]); }}
-                                    className="w-full sm:w-auto flex-1 inline-flex items-center justify-center px-6 py-3 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                    className="w-full sm:w-auto flex-1 inline-flex items-center justify-center px-6 py-3 border border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors"
                                 >
                                     Převést další
                                 </button>
                             </div>
                         )}
                          {isConverting && (
-                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-4">
+                            <div className="w-full bg-slate-700 rounded-full h-2.5 mt-4">
                                 <div className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
                             </div>
                         )}

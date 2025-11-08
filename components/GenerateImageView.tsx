@@ -17,15 +17,13 @@ const getApiErrorMessage = (error: unknown, defaultMessage: string = 'Došlo k n
 
 interface GenerateImageViewProps {
     title: string;
-    isDarkMode: boolean;
-    onToggleTheme: () => void;
     onOpenApiKeyModal: () => void;
     onToggleSidebar: () => void;
     onImageGenerated: (file: File) => void;
 }
 
 const GenerateImageView: React.FC<GenerateImageViewProps> = ({ 
-    title, isDarkMode, onToggleTheme, onOpenApiKeyModal, onToggleSidebar, onImageGenerated 
+    title, onOpenApiKeyModal, onToggleSidebar, onImageGenerated 
 }) => {
     const [prompt, setPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -77,20 +75,20 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
     return (
         <>
             <div className="h-full w-full flex flex-col">
-                <Header title={title} isDarkMode={isDarkMode} onToggleTheme={onToggleTheme} onOpenApiKeyModal={onOpenApiKeyModal} onToggleSidebar={onToggleSidebar}/>
+                <Header title={title} onOpenApiKeyModal={onOpenApiKeyModal} onToggleSidebar={onToggleSidebar}/>
                 <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
                     <div className="w-full max-w-5xl">
                         <div className="text-center mb-10">
-                            <h1 className="text-4xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Vytvořte cokoliv s AI</h1>
-                            <p className="mt-3 text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto">
+                            <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">Vytvořte cokoliv s AI</h1>
+                            <p className="mt-3 text-xl text-slate-400 max-w-3xl mx-auto">
                                 Popište obrázek, který si přejete vygenerovat, a nechte AI, aby ho vytvořila za vás.
                             </p>
                         </div>
                         
-                        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-8 rounded-2xl shadow-lg border border-slate-200/50 dark:border-slate-800/50">
+                        <div className="backdrop-blur-xl p-8 rounded-2xl shadow-lg border border-slate-800/50">
                             <div className="flex flex-col md:flex-row gap-8">
                                 <div className="flex-1">
-                                    <label htmlFor="prompt" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label htmlFor="prompt" className="block text-sm font-semibold text-slate-300 mb-2">
                                         Popis obrázku (prompt)
                                     </label>
                                     <textarea
@@ -99,7 +97,7 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
                                         value={prompt}
                                         onChange={(e) => setPrompt(e.target.value)}
                                         placeholder="např. Fotorealistický portrét astronauta jedoucího na koni na Marsu"
-                                        className="block w-full border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 rounded-md shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 dark:focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm text-base p-3 transition-shadow"
+                                        className="block w-full border-slate-700 bg-slate-800/80 rounded-md shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm text-base p-3 transition-shadow"
                                     />
                                     <button
                                         onClick={handleGenerate}
@@ -109,10 +107,10 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
                                         <GenerateImageIcon className="-ml-1 mr-3 h-5 w-5" />
                                         {isLoading ? 'Generuji...' : 'Generovat obrázek'}
                                     </button>
-                                    {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400 bg-red-500/10 p-3 rounded-md border border-red-500/20">{error}</p>}
+                                    {error && <p className="mt-3 text-sm text-red-400 bg-red-500/10 p-3 rounded-md border border-red-500/20">{error}</p>}
                                 </div>
 
-                                <div className="md:w-96 flex-shrink-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800/60 rounded-lg p-4 aspect-square">
+                                <div className="md:w-96 flex-shrink-0 flex flex-col items-center justify-center bg-slate-800/60 rounded-lg p-4 aspect-square">
                                     {isLoading && (
                                         <div className="flex flex-col items-center justify-center text-slate-500">
                                             <svg className="animate-spin h-12 w-12 text-fuchsia-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -137,7 +135,7 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
                                         </div>
                                     )}
                                     {!isLoading && !generatedImage && (
-                                        <div className="text-center text-slate-500 dark:text-slate-400">
+                                        <div className="text-center text-slate-400">
                                             <GenerateImageIcon className="mx-auto h-16 w-16 mb-4" />
                                             <p className="text-lg">Váš vygenerovaný obrázek se zobrazí zde.</p>
                                         </div>
@@ -160,7 +158,7 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
                         <img src={generatedImage} alt="Zvětšený náhled" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
                         <button 
                             onClick={() => setIsLightboxOpen(false)}
-                            className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full p-2 text-slate-600 dark:text-slate-300 hover:scale-110 transition-transform shadow-lg focus:outline-none focus:ring-2 focus:ring-white dark:focus:ring-slate-400"
+                            className="absolute -top-3 -right-3 bg-slate-800 rounded-full p-2 text-slate-300 hover:scale-110 transition-transform shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-400"
                             aria-label="Zavřít náhled"
                         >
                             <XIcon className="w-6 h-6" />

@@ -44,8 +44,6 @@ interface EditorViewProps {
   onRedo: () => void;
   // Header props
   title: string;
-  isDarkMode: boolean;
-  onToggleTheme: () => void;
   onOpenApiKeyModal: () => void;
   onToggleSidebar: () => void;
 }
@@ -200,7 +198,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     // Store difference for learning
     if (typeof value === 'number' && typeof oldVal === 'number') {
         const change = value - oldVal;
-        editChangesRef.current[key] = (editChangesRef.current[key] || 0) + change;
+        // FIX: Operator '+' cannot be applied to types 'number | Partial<ManualEdits>[K]' and 'number'.
+        // TypeScript isn't able to infer that 'key' must refer to a numeric property
+        // inside this block. We cast `key` to a more specific type that excludes 'crop'
+        // to ensure type safety for both reading from and writing to `editChangesRef`.
+        const numericKey = key as Exclude<keyof ManualEdits, 'crop'>;
+        editChangesRef.current[numericKey] = (editChangesRef.current[numericKey] || 0) + change;
     }
   }, [manualEdits]);
   
@@ -284,7 +287,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         return (
             <div className="p-8 text-center flex flex-col items-center justify-center h-full">
                 <LogoIcon className="w-16 h-16 text-cyan-500/50 mb-4" />
-                <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">Vítejte v editoru</h3>
+                <h3 className="text-xl font-bold text-slate-200">Vítejte v editoru</h3>
                 <p className="text-slate-500 mt-2">Vyberte nástroj z levého menu pro zahájení úprav.</p>
             </div>
         );
@@ -296,27 +299,27 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         <div className="w-full h-full flex flex-col">
             <Header {...props} />
              <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                <UploadIcon className="w-24 h-24 text-slate-300 dark:text-slate-700 mb-6" />
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Žádné obrázky k úpravě</h2>
-                <p className="mt-2 text-lg text-slate-500 dark:text-slate-400">Prosím, nahrajte nejprve nějaké obrázky.</p>
+                <UploadIcon className="w-24 h-24 text-slate-700 mb-6" />
+                <h2 className="text-3xl font-bold text-slate-100">Žádné obrázky k úpravě</h2>
+                <p className="mt-2 text-lg text-slate-400">Prosím, nahrajte nejprve nějaké obrázky.</p>
              </div>
         </div>
       );
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-200/50 dark:bg-slate-900/50">
+    <div className="w-full h-full flex flex-col">
       <Header {...props} />
       <div className="flex-1 flex overflow-hidden">
         {/* Main Content */}
         <div className="flex-1 flex flex-col relative overflow-hidden">
           {/* Top Toolbar */}
-          <div className="flex-shrink-0 h-16 bg-white/60 dark:bg-slate-900/70 backdrop-blur-xl flex items-center justify-between px-4 border-b border-slate-200/50 dark:border-slate-800/50">
+          <div className="flex-shrink-0 h-16 backdrop-blur-xl flex items-center justify-between px-4 border-b border-slate-800/50">
             <div className="flex items-center gap-2">
                 <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-500/10"><UndoIcon className="w-5 h-5" /></button>
                 <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-500/10"><RedoIcon className="w-5 h-5" /></button>
             </div>
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate max-w-xs sm:max-w-sm md:max-w-md">{activeFile?.file.name}</p>
+            <p className="text-sm font-medium text-slate-300 truncate max-w-xs sm:max-w-sm md:max-w-md">{activeFile?.file.name}</p>
              <div className="flex items-center gap-2">
                  {activeFile && (
                     <button onClick={() => setShowOriginal(p => !p)} onMouseDown={() => setShowOriginal(true)} onMouseUp={() => setShowOriginal(false)} onTouchStart={() => setShowOriginal(true)} onTouchEnd={() => setShowOriginal(false)} className="flex items-center gap-2 p-2 rounded-lg text-sm hover:bg-slate-500/10">
@@ -352,10 +355,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         </div>
         
         {/* Right Sidebar */}
-        <aside className="w-80 flex-shrink-0 border-l border-slate-200/50 dark:border-slate-800/50 bg-white/60 dark:bg-slate-900/70 backdrop-blur-xl flex flex-col">
+        <aside className="w-80 flex-shrink-0 border-l border-slate-800/50 backdrop-blur-xl flex flex-col">
           <div className="flex-1 overflow-y-auto">
             {error && (
-              <div className="p-4 m-4 bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20 rounded-lg text-sm">
+              <div className="p-4 m-4 bg-red-500/10 text-red-300 border border-red-500/20 rounded-lg text-sm">
                 <p className="font-bold mb-1">Došlo k chybě</p>
                 {error}
               </div>
@@ -366,13 +369,13 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       </div>
       
       {/* Filmstrip */}
-      <div className="flex-shrink-0 h-28 bg-white/50 dark:bg-slate-900/60 backdrop-blur-lg border-t border-slate-200/50 dark:border-slate-800/50 p-2">
+      <div className="flex-shrink-0 h-28 backdrop-blur-lg border-t border-slate-800/50 p-2">
         <div className="h-full flex items-center space-x-3 overflow-x-auto">
           {files.map(file => (
             <button 
                 key={file.id} 
                 onClick={() => onSetActiveFileId(file.id)}
-                className={`h-24 w-24 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 focus:outline-none ${file.id === activeFileId ? 'ring-4 ring-cyan-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900' : 'hover:scale-105'}`}
+                className={`h-24 w-24 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 focus:outline-none ${file.id === activeFileId ? 'ring-4 ring-cyan-500 ring-offset-2 ring-offset-slate-950' : 'hover:scale-105'}`}
             >
               <img src={file.previewUrl} alt={file.file.name} className="w-full h-full object-cover"/>
               {file.isAnalyzing && (
@@ -401,7 +404,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ file, onAnalyze, isLoadin
   return (
     <div className="p-4 space-y-6 animate-fade-in-right">
       <div>
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">AI Analýza</h3>
+        <h3 className="text-lg font-bold text-slate-100">AI Analýza</h3>
         <p className="text-sm text-slate-500 mt-1">Získejte podrobný rozbor vaší fotografie, včetně technických údajů a návrhů na vylepšení.</p>
       </div>
       
@@ -413,33 +416,33 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ file, onAnalyze, isLoadin
       ) : (
         <div className="space-y-4 text-sm">
           <div>
-            <h4 className="font-semibold text-slate-700 dark:text-slate-200 mb-1">Popis</h4>
-            <p className="text-slate-600 dark:text-slate-400">{file.analysis.description}</p>
+            <h4 className="font-semibold text-slate-200 mb-1">Popis</h4>
+            <p className="text-slate-400">{file.analysis.description}</p>
           </div>
           <div>
-            <h4 className="font-semibold text-slate-700 dark:text-slate-200 mb-2">Návrhy na vylepšení</h4>
-            <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400">
+            <h4 className="font-semibold text-slate-200 mb-2">Návrhy na vylepšení</h4>
+            <ul className="list-disc list-inside space-y-1 text-slate-400">
               {file.analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-slate-700 dark:text-slate-200 mb-2">Technické informace</h4>
+            <h4 className="font-semibold text-slate-200 mb-2">Technické informace</h4>
             <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-md">
+                <div className="bg-slate-800 p-2 rounded-md">
                     <p className="text-xs text-slate-500">ISO</p>
                     <p className="font-mono font-semibold">{file.analysis.technicalInfo.ISO}</p>
                 </div>
-                 <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-md">
+                 <div className="bg-slate-800 p-2 rounded-md">
                     <p className="text-xs text-slate-500">Clona</p>
                     <p className="font-mono font-semibold">{file.analysis.technicalInfo.Aperture}</p>
                 </div>
-                 <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-md">
+                 <div className="bg-slate-800 p-2 rounded-md">
                     <p className="text-xs text-slate-500">Závěrka</p>
                     <p className="font-mono font-semibold">{file.analysis.technicalInfo.ShutterSpeed}</p>
                 </div>
             </div>
           </div>
-          <button onClick={onAnalyze} disabled={isLoading} className="w-full text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:underline pt-2">
+          <button onClick={onAnalyze} disabled={isLoading} className="w-full text-sm font-medium text-cyan-400 hover:underline pt-2">
             Analyzovat znovu
           </button>
         </div>
@@ -462,7 +465,7 @@ const SimpleActionPanel: React.FC<SimpleActionPanelProps> = ({ title, descriptio
         <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-500 mb-4">
             {icon}
         </div>
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h3>
+        <h3 className="text-lg font-bold text-slate-100">{title}</h3>
         <p className="text-sm text-slate-500 mt-1 mb-6 max-w-xs">{description}</p>
         <button onClick={onAction} disabled={isLoading} className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition">
           {isLoading ? 'Pracuji...' : actionText}

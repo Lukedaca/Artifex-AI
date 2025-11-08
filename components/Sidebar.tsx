@@ -62,7 +62,7 @@ const aiTools: {icon: React.ReactNode, label: string, view: View, action?: strin
 const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-slate-500/10 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-4 px-4 py-2.5'} ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`} 
+    className={`w-full flex items-center text-sm font-medium rounded-lg hover:bg-slate-500/10 transition-all duration-200 group ${isCollapsed ? 'justify-center py-3' : 'space-x-4 px-4 py-2.5'} ${isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`} 
     title={isCollapsed ? label : undefined}
   >
     <span className="relative z-10">{icon}</span>
@@ -80,25 +80,25 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
   return (
     <>
       <div className={`fixed inset-0 bg-slate-900/80 z-40 transition-opacity lg:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}></div>
-      <aside className={`fixed top-0 left-0 h-full bg-white/60 dark:bg-slate-900/70 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-800/50 z-50 transform transition-all duration-300 ease-in-out flex-shrink-0 ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'} ${isCollapsed ? 'lg:w-24' : 'lg:w-64'} lg:translate-x-0`}>
+      <aside className={`fixed top-0 left-0 h-full backdrop-blur-2xl border-r border-slate-800/50 z-50 transform transition-all duration-300 ease-in-out flex-shrink-0 ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64'} ${isCollapsed ? 'lg:w-24' : 'lg:w-64'} lg:translate-x-0`}>
         <div className="flex flex-col h-full">
-          <div className={`relative flex items-center h-20 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'justify-center px-4' : 'space-x-3 px-5'}`}>
-            <LogoIcon className="w-8 h-8 text-cyan-500 dark:text-cyan-400 flex-shrink-0" />
+          <div className={`relative flex items-center h-20 border-b border-slate-800/50 flex-shrink-0 transition-all duration-300 ${isCollapsed ? 'justify-center px-4' : 'space-x-3 px-5'}`}>
+            <LogoIcon className="w-8 h-8 text-cyan-400 flex-shrink-0" />
             {!isCollapsed && (
               <div className="flex-grow overflow-hidden">
                 <h1 className="text-xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">Artifex AI</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 -mt-0.5">v3.1</p>
+                <p className="text-xs text-slate-400 -mt-0.5">v3.1</p>
               </div>
             )}
-            <button onClick={onToggleCollapse} className="hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 -right-3.5 z-10 w-7 h-7 bg-white dark:bg-slate-800 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-cyan-500 transition-all duration-300 hover:scale-110 active:scale-100">
+            <button onClick={onToggleCollapse} className="hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 -right-3.5 z-10 w-7 h-7 bg-slate-800 rounded-full shadow-lg border border-slate-700 text-slate-500 hover:text-cyan-500 transition-all duration-300 hover:scale-110 active:scale-100">
                 <ChevronDoubleLeftIcon className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} />
             </button>
           </div>
           
           <nav className="flex-grow flex flex-col space-y-8 overflow-y-auto p-4">
             <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">Hlavní nástroje</h2>}
-              {isCollapsed && <hr className="mb-4 border-slate-200/80 dark:border-slate-700/80" />}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Hlavní nástroje</h2>}
+              {isCollapsed && <hr className="mb-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {mainTools.map((item) => {
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : activeAction === null);
@@ -109,8 +109,8 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
               </div>
             </div>
              <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">Styly & Presety</h2>}
-              {isCollapsed && <hr className="my-4 border-slate-200/80 dark:border-slate-700/80" />}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Styly & Presety</h2>}
+              {isCollapsed && <hr className="my-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {presetsTools.map((item) => {
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : !activeAction);
@@ -121,8 +121,8 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
               </div>
             </div>
             <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase">AI nástroje</h2>}
-              {isCollapsed && <hr className="my-4 border-slate-200/80 dark:border-slate-700/80" />}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">AI nástroje</h2>}
+              {isCollapsed && <hr className="my-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {aiTools.map((item) => {
                   const isActive = item.view === currentView && (item.action ? item.action === (activeAction?.action) : !activeAction);
@@ -135,7 +135,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
           </nav>
 
           {!isCollapsed && (
-            <div className="mt-auto pt-4 p-4 text-center text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
+            <div className="mt-auto pt-4 p-4 text-center text-xs text-slate-500 flex-shrink-0">
               © 2025 Artifex AI
             </div>
           )}

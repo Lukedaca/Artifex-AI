@@ -70,13 +70,6 @@ interface Notification {
   type: 'info' | 'error';
 }
 
-const getInitialTheme = (): boolean => {
-    const savedTheme = localStorage.getItem('artifex-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return savedTheme === 'dark' || (!savedTheme && prefersDark);
-};
-
-
 function App() {
   const [view, setView] = useState<View>('home');
   const [history, dispatchHistory] = useReducer(historyReducer, initialHistoryState);
@@ -85,7 +78,6 @@ function App() {
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
 
-  const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [apiKeyChecked, setApiKeyChecked] = useState(false);
 
@@ -97,15 +89,6 @@ function App() {
 
 
   // --- Effects ---
-
-  // Check for saved theme preference
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
 
   // API Key Check
   useEffect(() => {
@@ -123,6 +106,12 @@ function App() {
   // Load presets
   useEffect(() => {
       setUserPresets(getPresets());
+  }, []);
+
+  // Set permanent dark theme on mount
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('artifex-theme', 'dark');
   }, []);
 
   // --- Handlers ---
@@ -145,14 +134,6 @@ function App() {
       setNotifications(n => n.filter(notif => notif.id !== id));
     }, 5000);
   }, []);
-
-  const handleToggleTheme = () => {
-    setIsDarkMode(prev => {
-      const newIsDark = !prev;
-      localStorage.setItem('artifex-theme', newIsDark ? 'dark' : 'light');
-      return newIsDark;
-    });
-  };
   
   const handleToggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
@@ -254,8 +235,6 @@ function App() {
   const renderView = () => {
     const headerProps = {
         title: getPageTitle(),
-        isDarkMode: isDarkMode,
-        onToggleTheme: handleToggleTheme,
         onOpenApiKeyModal: () => setIsApiKeyModalOpen(true),
         onToggleSidebar: handleToggleSidebar,
     };
@@ -281,7 +260,7 @@ function App() {
   }
 
   return (
-    <div className={`h-screen w-screen overflow-hidden flex font-sans bg-slate-100 dark:bg-slate-950 transition-colors duration-300`}>
+    <div className={`h-screen w-screen overflow-hidden flex font-sans bg-slate-950`}>
         <Sidebar 
             isOpen={isSidebarOpen}
             isCollapsed={isSidebarCollapsed}
@@ -299,7 +278,7 @@ function App() {
 
         <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
             {notifications.map(n => (
-                <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-800 dark:text-cyan-200'}`}>
+                <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-200'}`}>
                     <span className="flex-1">{n.message}</span>
                     <button onClick={() => setNotifications(current => current.filter(notif => notif.id !== n.id))} className="ml-4 -mr-1 p-1 rounded-full hover:bg-black/10">
                         <XCircleIcon className="w-5 h-5" />

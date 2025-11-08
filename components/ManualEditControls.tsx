@@ -13,8 +13,8 @@ interface SliderProps {
 const Slider: React.FC<SliderProps> = ({ label, value, min = -100, max = 100, step = 1, onChange }) => (
   <div className="space-y-2">
     <div className="flex justify-between items-center">
-      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
-      <span className="text-sm font-mono text-slate-500 dark:text-slate-400 w-12 text-right">{value.toFixed(0)}</span>
+      <label className="text-sm font-medium text-slate-300">{label}</label>
+      <span className="text-sm font-mono text-slate-400 w-12 text-right">{value.toFixed(0)}</span>
     </div>
     <input
       type="range"
@@ -23,7 +23,7 @@ const Slider: React.FC<SliderProps> = ({ label, value, min = -100, max = 100, st
       step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+      className="custom-slider"
     />
   </div>
 );
@@ -38,8 +38,8 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({ edits, onEditCh
   return (
     <div className="p-4 space-y-5 animate-fade-in-right">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Manuální úpravy</h3>
-        <button onClick={onReset} className="text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:underline">Resetovat</button>
+        <h3 className="text-lg font-bold text-slate-100">Manuální úpravy</h3>
+        <button onClick={onReset} className="text-sm font-medium text-cyan-400 hover:underline">Resetovat</button>
       </div>
 
       <Slider label="Jas" value={edits.brightness} onChange={(v) => onEditChange('brightness', v)} />
