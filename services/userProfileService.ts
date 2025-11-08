@@ -13,6 +13,8 @@ const getInitialProfile = (): UserProfile => ({
     shadows: 0,
     highlights: 0,
     clarity: 0,
+    sharpness: 0,
+    noiseReduction: 0,
   },
   feedbackHistory: {},
   presets: [],

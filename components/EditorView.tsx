@@ -1,35 +1,27 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-
-// Types
-import type { UploadedFile, ManualEdits, EditorAction, History, Preset, Feedback } from '../types';
-
-// Services
-import { analyzeImage, autopilotImage, autoCropImage } from '../services/geminiService';
-import { applyEditsToImage } from '../utils/imageProcessor';
-import { updateUserTendencies, recordExplicitFeedback } from '../services/userProfileService';
-
-// Components
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Header from './Header';
 import ManualEditControls from './ManualEditControls';
 import FeedbackButtons from './FeedbackButtons';
-import {
-  AnalysisIcon,
-  AutopilotIcon,
-  AutoCropIcon,
-  EraserIcon,
-  UndoIcon,
-  RedoIcon,
-  EyeIcon,
-  StyleTransferIcon,
-  BackgroundReplacementIcon,
-  PresetIcon,
-  ExportIcon,
-  HistoryIcon,
-  UploadIcon
+import { 
+    UndoIcon, 
+    RedoIcon, 
+    EyeIcon, 
+    UploadIcon, 
+    AutopilotIcon, 
+    ArrowPathIcon,
+    AutoCropIcon,
+    BackgroundReplacementIcon,
+    StyleTransferIcon,
+    HistoryIcon,
+    PresetIcon,
+    ExportIcon
 } from './icons';
-import { LogoIcon } from './icons';
+import type { UploadedFile, AnalysisResult, EditorAction, History, Preset, ProactiveSuggestion, Feedback, ManualEdits } from '../types';
+import * as geminiService from '../services/geminiService';
+import { recordExplicitFeedback } from '../services/userProfileService';
+import { applyEditsAndExport } from '../utils/imageProcessor';
 
-// --- Props ---
+// Props Interface
 interface EditorViewProps {
   files: UploadedFile[];
   activeFileId: string | null;
@@ -48,6 +40,15 @@ interface EditorViewProps {
   onToggleSidebar: () => void;
 }
 
+const getApiErrorMessage = (error: unknown, defaultMessage = 'Došlo k neznámé chybě.'): string => {
+    if (error instanceof Error) {
+        if (error.message.toLowerCase().includes('api key') || error.message.toLowerCase().includes('auth')) {
+            return 'API klíč není platný nebo chybí. Zkuste prosím vybrat jiný.';
+        }
+        return error.message;
+    }
+    return defaultMessage;
+};
 
 const INITIAL_EDITS: ManualEdits = {
   brightness: 0,
@@ -57,421 +58,480 @@ const INITIAL_EDITS: ManualEdits = {
   shadows: 0,
   highlights: 0,
   clarity: 0,
+  sharpness: 0,
+  noiseReduction: 0,
 };
 
-// --- Main Component ---
+// Main Component
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { files, activeFileId, onSetFiles, onSetActiveFileId, activeAction, addNotification, history, onUndo, onRedo } = props;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Pracuji...');
-  const [error, setError] = useState<string | null>(null);
-
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [isComparing, setIsComparing] = useState(false);
+  const [editedPreviewUrl, setEditedPreviewUrl] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  
+  // State for specific tool inputs
+  const [removeObjectPrompt, setRemoveObjectPrompt] = useState('');
+  const [replaceBgPrompt, setReplaceBgPrompt] = useState('');
+  const [styleTransferFile, setStyleTransferFile] = useState<File | null>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
   const [manualEdits, setManualEdits] = useState<ManualEdits>(INITIAL_EDITS);
-  const [showOriginal, setShowOriginal] = useState(false);
-  const [feedbackActionId, setFeedbackActionId] = useState<string | null>(null);
+    const [exportOptions, setExportOptions] = useState({
+        format: 'jpeg',
+        quality: 90,
+        scale: 1,
+    });
+
+  const [showFeedback, setShowFeedback] = useState<string | null>(null); // actionId for feedback
 
   const activeFile = useMemo(() => files.find(f => f.id === activeFileId), [files, activeFileId]);
   
-  // Ref to track edit changes for learning
-  const editChangesRef = useRef<Partial<ManualEdits>>({});
-  
-  // Debounce saving tendency updates
+  // When active file changes, reset the manual edits and clear the live preview.
   useEffect(() => {
-    const handler = setTimeout(() => {
-      if (Object.keys(editChangesRef.current).length > 0) {
-        updateUserTendencies(editChangesRef.current);
-        editChangesRef.current = {};
-      }
-    }, 2000);
-    return () => clearTimeout(handler);
-  }, [manualEdits]);
-
-  // When active file changes, reset local state
-  useEffect(() => {
-    setError(null);
-    setManualEdits(INITIAL_EDITS); // Reset edits when switching images
-    setShowOriginal(false);
-    setFeedbackActionId(null);
+      setManualEdits(INITIAL_EDITS);
   }, [activeFileId]);
+
+  // Effect to generate a live preview when manual edits change
+  useEffect(() => {
+    if (!activeFile) {
+      return;
+    }
+    
+    const areEditsInitial = Object.values(manualEdits).every(v => v === 0);
+
+    if (areEditsInitial) {
+      if (editedPreviewUrl) setEditedPreviewUrl(null); // Triggers cleanup effect
+      return;
+    }
+
+    setIsGeneratingPreview(true);
+    const handler = setTimeout(async () => {
+      if (!activeFile) return;
+      try {
+        const imageBlob = await applyEditsAndExport(
+          activeFile.previewUrl,
+          manualEdits,
+          { format: 'jpeg', quality: 90, scale: 1 } // Use good quality for preview
+        );
+        const objectUrl = URL.createObjectURL(imageBlob);
+        setEditedPreviewUrl(objectUrl);
+      } catch (e) {
+        console.error("Failed to generate live preview", e);
+        addNotification('Náhled úprav se nepodařilo vygenerovat.', 'error');
+      } finally {
+        setIsGeneratingPreview(false);
+      }
+    }, 250); // Debounce user input
+
+    return () => clearTimeout(handler);
+  }, [activeFile, manualEdits, addNotification]);
   
-  const updateActiveFile = (updater: (file: UploadedFile) => UploadedFile, actionName: string) => {
-    if (!activeFileId) return;
+  // Effect to clean up the blob URL when it changes or the component unmounts
+  useEffect(() => {
+      // This will store the URL to be cleaned up in the closure.
+      const urlToClean = editedPreviewUrl;
+      return () => {
+          if (urlToClean) {
+              URL.revokeObjectURL(urlToClean);
+          }
+      };
+  }, [editedPreviewUrl]);
+
+  
+  const updateFile = useCallback((fileId: string, updates: Partial<UploadedFile>, actionName: string) => {
     onSetFiles(currentFiles => 
-      currentFiles.map(f => f.id === activeFileId ? updater(f) : f),
+      currentFiles.map(f => f.id === fileId ? { ...f, ...updates } : f),
       actionName
     );
-  };
+  }, [onSetFiles]);
   
-  // --- Handlers for AI Actions ---
+  const handleAiAction = useCallback(async (action: () => Promise<{ file: File }>, actionName: string) => {
+      if (!activeFile) return;
+      setIsLoading(true);
+      setLoadingMessage(`Aplikuji ${actionName}...`);
+      setShowFeedback(null);
+      try {
+          const { file: newFile } = await action();
+          const newPreviewUrl = URL.createObjectURL(newFile);
+          
+          // Before updating, clean up the old URL from the main file object
+          URL.revokeObjectURL(activeFile.previewUrl);
 
+          const actionId = `${Date.now()}`;
+          updateFile(activeFile.id, {
+              file: newFile,
+              previewUrl: newPreviewUrl,
+              analysis: undefined // Clear old analysis
+          }, actionName);
+          addNotification(`${actionName} byl úspěšně aplikován.`, 'info');
+          setShowFeedback(actionId);
+      } catch (e) {
+          addNotification(getApiErrorMessage(e, `Nepodařilo se aplikovat ${actionName}.`), 'error');
+      } finally {
+          setIsLoading(false);
+      }
+  }, [activeFile, addNotification, updateFile]);
+
+  // --- Handlers for specific AI actions ---
   const handleAnalyze = useCallback(async () => {
     if (!activeFile) return;
     setIsLoading(true);
     setLoadingMessage('Analyzuji obrázek...');
-    setError(null);
-    updateActiveFile(f => ({ ...f, isAnalyzing: true }), 'Start Analysis');
-
+    updateFile(activeFile.id, { isAnalyzing: true, analysis: undefined }, 'Start Analysis');
     try {
-      const result = await analyzeImage(activeFile.file);
-      updateActiveFile(f => ({ ...f, analysis: result, isAnalyzing: false }), 'Image Analyzed');
+      const result = await geminiService.analyzeImage(activeFile.file);
+      updateFile(activeFile.id, { analysis: result, isAnalyzing: false }, 'Analysis Complete');
       addNotification('Analýza obrázku dokončena.', 'info');
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Neznámá chyba';
-      setError(`Chyba při analýze: ${message}`);
-      addNotification(`Chyba při analýze: ${message}`, 'error');
-      updateActiveFile(f => ({ ...f, isAnalyzing: false }), 'Analysis Failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeFile, updateActiveFile, addNotification]);
-
-  const handleAutopilot = useCallback(async () => {
-    if (!activeFile) return;
-    setIsLoading(true);
-    setLoadingMessage('Aplikuji AI vylepšení...');
-    setError(null);
-    
-    try {
-      const { file: newFile, edits } = await autopilotImage(activeFile.file);
-      URL.revokeObjectURL(activeFile.previewUrl);
-      const newPreviewUrl = URL.createObjectURL(newFile);
-      const actionId = `autopilot-${Date.now()}`;
-
-      updateActiveFile(f => ({ 
-        ...f, 
-        file: newFile, 
-        previewUrl: newPreviewUrl 
-      }), 'Autopilot Applied');
-      setManualEdits({ ...INITIAL_EDITS, ...edits }); // Show what the AI did
-      setFeedbackActionId(actionId);
-      addNotification('Vylepšení Autopilot AI bylo aplikováno.', 'info');
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Neznámá chyba';
-      setError(`Chyba Autopilota: ${message}`);
-      addNotification(`Chyba Autopilota: ${message}`, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeFile, updateActiveFile, addNotification]);
-  
-  const handleAutoCrop = useCallback(async () => {
-    if (!activeFile) return;
-    setIsLoading(true);
-    setLoadingMessage('Hledám nejlepší kompozici...');
-    setError(null);
-
-    try {
-        const cropCoords = await autoCropImage(activeFile.file);
-        const editedBlob = await applyEditsToImage(activeFile.file, {}, cropCoords);
-        
-        const newFileName = activeFile.file.name.replace(/\.[^/.]+$/, "_cropped.png");
-        const newFile = new File([editedBlob], newFileName, { type: 'image/png' });
-
-        URL.revokeObjectURL(activeFile.previewUrl);
-        const newPreviewUrl = URL.createObjectURL(newFile);
-        
-        const actionId = `autocrop-${Date.now()}`;
-        setFeedbackActionId(actionId);
-
-        updateActiveFile(f => ({
-            ...f,
-            file: newFile,
-            previewUrl: newPreviewUrl,
-        }), 'Auto-crop Applied');
-        
-        addNotification('Bylo aplikováno automatické oříznutí.', 'info');
-    } catch (e) {
-        const message = e instanceof Error ? e.message : 'Neznámá chyba';
-        setError(`Chyba při ořezu: ${message}`);
-        addNotification(`Chyba při ořezu: ${message}`, 'error');
+      addNotification(getApiErrorMessage(e, 'Analýza selhala.'), 'error');
+      updateFile(activeFile.id, { isAnalyzing: false }, 'Analysis Failed');
     } finally {
         setIsLoading(false);
     }
-}, [activeFile, updateActiveFile, addNotification]);
+  }, [activeFile, addNotification, updateFile]);
 
-
-  const handleEditChange = useCallback(<K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
-    const oldVal = manualEdits[key];
-    setManualEdits(prev => ({ ...prev, [key]: value }));
-    
-    // Store difference for learning
-    if (typeof value === 'number' && typeof oldVal === 'number') {
-        const change = value - oldVal;
-        // FIX: Operator '+' cannot be applied to types 'number | Partial<ManualEdits>[K]' and 'number'.
-        // TypeScript isn't able to infer that 'key' must refer to a numeric property
-        // inside this block. We cast `key` to a more specific type that excludes 'crop'
-        // to ensure type safety for both reading from and writing to `editChangesRef`.
-        const numericKey = key as Exclude<keyof ManualEdits, 'crop'>;
-        editChangesRef.current[numericKey] = (editChangesRef.current[numericKey] || 0) + change;
+  const handleAutopilot = () => handleAiAction(() => geminiService.autopilotImage(activeFile!.file), 'Autopilot AI');
+  const handleRemoveObject = () => handleAiAction(() => geminiService.removeObject(activeFile!.file, removeObjectPrompt), 'Odstranění objektu');
+  const handleAutoCrop = () => handleAiAction(() => geminiService.autoCrop(activeFile!.file), 'Automatické oříznutí');
+  const handleReplaceBg = () => handleAiAction(() => geminiService.replaceBackground(activeFile!.file, replaceBgPrompt), 'Výměna pozadí');
+  const handleStyleTransfer = () => {
+    if (!styleTransferFile) {
+        addNotification("Vyberte prosím obrázek stylu.", "error");
+        return;
     }
-  }, [manualEdits]);
-  
-  const handleApplyManualEdits = useCallback(async () => {
-    if (!activeFile) return;
-    setIsLoading(true);
-    setLoadingMessage('Aplikuji úpravy...');
-    try {
-        const editedBlob = await applyEditsToImage(activeFile.file, manualEdits);
-        const newFileName = activeFile.file.name.replace(/\.[^/.]+$/, "_edited.png");
-        const newFile = new File([editedBlob], newFileName, { type: 'image/png' });
-        
-        URL.revokeObjectURL(activeFile.previewUrl);
-        const newPreviewUrl = URL.createObjectURL(newFile);
-        
-        updateActiveFile(f => ({
-            ...f,
-            file: newFile,
-            previewUrl: newPreviewUrl,
-        }), 'Manual Edits Applied');
-
-        setManualEdits(INITIAL_EDITS); // Reset sliders after applying
-        addNotification('Manuální úpravy byly aplikovány.', 'info');
-    } catch (e) {
-        addNotification('Nepodařilo se aplikovat úpravy.', 'error');
-    } finally {
-        setIsLoading(false);
-    }
-  }, [activeFile, manualEdits, updateActiveFile, addNotification]);
-
-  const handleFeedback = (feedback: Feedback) => {
-    if (feedbackActionId) {
-      recordExplicitFeedback(feedbackActionId, feedback);
-      const message = feedback === 'good' ? 'Děkujeme za zpětnou vazbu!' : 'Děkujeme, zkusíme to příště lépe.';
-      addNotification(message, 'info');
-    }
-    setFeedbackActionId(null);
+    handleAiAction(() => geminiService.styleTransfer(activeFile!.file, styleTransferFile), 'Přenos stylu');
   };
 
-  const renderActiveActionPanel = () => {
-    if (!activeFile) return null;
+  const handleFeedback = (actionId: string, feedback: Feedback) => {
+    recordExplicitFeedback(actionId, feedback);
+    addNotification('Děkujeme za zpětnou vazbu!', 'info');
+  };
+
+  const handleProactiveSuggestion = (suggestion: ProactiveSuggestion) => {
+      if (suggestion.action === 'auto-crop') {
+          handleAutoCrop();
+      } else if (suggestion.action === 'remove-object') {
+          addNotification('Nástroj pro odstranění objektu je připraven.', 'info');
+      }
+  };
+
+    const handleEditChange = useCallback(<K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
+        setManualEdits(prev => ({ ...prev, [key]: value }));
+    }, []);
+
+    const handleResetEdits = useCallback(() => {
+        setManualEdits(INITIAL_EDITS);
+    }, []);
+
+    const handleDownload = async () => {
+        if (!activeFile) {
+            addNotification('Žádný aktivní obrázek k exportu.', 'error');
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage('Exportuji obrázek...');
+
+        try {
+            const imageBlob = await applyEditsAndExport(
+                activeFile.previewUrl, // Use the current preview URL which reflects all AI edits
+                manualEdits,
+                exportOptions
+            );
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(imageBlob);
+            
+            const fileExtension = exportOptions.format === 'jpeg' ? 'jpg' : 'png';
+            const originalName = activeFile.file.name.replace(/\.[^/.]+$/, '');
+            link.download = `${originalName}_artifex.${fileExtension}`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            URL.revokeObjectURL(link.href);
+            addNotification('Obrázek byl úspěšně stažen.', 'info');
+
+        } catch (e) {
+            console.error('Download failed', e);
+            addNotification(getApiErrorMessage(e, 'Export obrázku se nezdařil.'), 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
+  useEffect(() => {
+    if (activeAction?.action === 'analysis' && activeFile && !activeFile.analysis && !activeFile.isAnalyzing) {
+        handleAnalyze();
+    }
+  }, [activeAction, activeFile, handleAnalyze]);
+
+
+  // RENDER LOGIC
+  const renderActionPanel = () => {
+    if (!activeFile) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 p-8">
+            <UploadIcon className="w-16 h-16 mb-4" />
+            <h2 className="text-xl font-bold text-slate-300">Žádný vybraný obrázek</h2>
+            <p>Nahrajte nebo vyberte obrázek pro zahájení úprav.</p>
+        </div>
+      );
+    }
+
     switch (activeAction?.action) {
       case 'analysis':
-        return <AnalysisPanel file={activeFile} onAnalyze={handleAnalyze} isLoading={isLoading} />;
-      case 'manual-edit':
         return (
-          <div className="space-y-4">
-            <ManualEditControls
-              edits={manualEdits}
-              onEditChange={handleEditChange}
-              onReset={() => setManualEdits(INITIAL_EDITS)}
-            />
-            <div className="px-4">
-              <button
-                onClick={handleApplyManualEdits}
-                className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 transition"
-              >
-                Aplikovat úpravy
-              </button>
-            </div>
+          <div className="p-4 space-y-4 animate-fade-in-right">
+            <h3 className="text-lg font-bold text-slate-100">AI Analýza</h3>
+            {activeFile.isAnalyzing && <div className="flex items-center space-x-2 text-slate-400"><ArrowPathIcon className="w-5 h-5 animate-spin" /><span>Analyzuji...</span></div>}
+            {activeFile.analysis && (
+              <div className="space-y-4 text-sm">
+                <div><h4 className="font-semibold text-slate-300 mb-1">Popis</h4><p className="text-slate-400">{activeFile.analysis.description}</p></div>
+                <div><h4 className="font-semibold text-slate-300 mb-1">Návrhy na vylepšení</h4><ul className="list-disc list-inside text-slate-400 space-y-1">{activeFile.analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+                {activeFile.analysis.proactiveSuggestions && <div><h4 className="font-semibold text-slate-300 mb-1">Proaktivní návrhy</h4><div className="flex flex-col gap-2">{activeFile.analysis.proactiveSuggestions.map((s, i) => (<button key={i} onClick={() => handleProactiveSuggestion(s)} className="text-left text-cyan-400 hover:underline">{s.text}</button>))}</div></div>}
+                <div><h4 className="font-semibold text-slate-300 mb-1">Technické informace</h4><p className="text-slate-400 font-mono text-xs">ISO: {activeFile.analysis.technicalInfo.ISO}, Clona: {activeFile.analysis.technicalInfo.Aperture}, Závěrka: {activeFile.analysis.technicalInfo.ShutterSpeed}</p></div>
+              </div>
+            )}
           </div>
         );
+      case 'manual-edit':
+        return <ManualEditControls edits={manualEdits} onEditChange={handleEditChange} onReset={handleResetEdits} />;
       case 'autopilot':
-        return <SimpleActionPanel title="Autopilot AI" description="Nechte AI automaticky vylepšit váš obrázek jedním kliknutím." icon={<AutopilotIcon className="w-8 h-8"/>} onAction={handleAutopilot} actionText="Spustit Autopilota" isLoading={isLoading} />;
-      case 'auto-crop':
-        return <SimpleActionPanel title="Automatické oříznutí" description="AI analyzuje kompozici a navrhne nejlepší ořez pro maximální dopad." icon={<AutoCropIcon className="w-8 h-8"/>} onAction={handleAutoCrop} actionText="Spustit automatické oříznutí" isLoading={isLoading} />;
-      // Stubs for other panels
+         return (
+            <div className="p-4 space-y-4 text-center animate-fade-in-right">
+                <AutopilotIcon className="w-16 h-16 mx-auto text-cyan-400"/>
+                <h3 className="text-lg font-bold text-slate-100">Autopilot AI</h3>
+                <p className="text-sm text-slate-400">Nechte AI automaticky vylepšit váš obrázek jedním kliknutím.</p>
+                <button onClick={handleAutopilot} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                    {isLoading ? 'Pracuji...' : 'Spustit Autopilot'}
+                </button>
+            </div>
+         );
       case 'remove-object':
-        return <div className="p-4 text-center"><EraserIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Nástroj pro odstranění objektů již brzy.</p></div>;
-      case 'style-transfer':
-        return <div className="p-4 text-center"><StyleTransferIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Nástroj pro přenos stylu již brzy.</p></div>;
-      case 'replace-background':
-        return <div className="p-4 text-center"><BackgroundReplacementIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Nástroj pro výměnu pozadí již brzy.</p></div>;
-       case 'user-presets':
-        return <div className="p-4 text-center"><PresetIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Správa presetů již brzy.</p></div>;
-       case 'export':
-        return <div className="p-4 text-center"><ExportIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Možnosti exportu již brzy.</p></div>;
-       case 'history':
-        return <div className="p-4 text-center"><HistoryIcon className="w-10 h-10 mx-auto text-slate-400 mb-2"/><p className="text-slate-500">Historie úprav již brzy.</p></div>;
+        return (
+            <div className="p-4 space-y-4 animate-fade-in-right">
+                <h3 className="text-lg font-bold text-slate-100">Odstranit objekt</h3>
+                <p className="text-sm text-slate-400">Popište objekt, který chcete z obrázku odstranit.</p>
+                <textarea value={removeObjectPrompt} onChange={e => setRemoveObjectPrompt(e.target.value)} rows={3} placeholder="např. 'modré auto v pozadí'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
+                <button onClick={handleRemoveObject} disabled={isLoading || !removeObjectPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                    {isLoading ? 'Odstraňuji...' : 'Odstranit'}
+                </button>
+            </div>
+        );
+        case 'auto-crop':
+            return (
+                <div className="p-4 space-y-4 text-center animate-fade-in-right">
+                    <AutoCropIcon className="w-16 h-16 mx-auto text-cyan-400"/>
+                    <h3 className="text-lg font-bold text-slate-100">Automatické oříznutí</h3>
+                    <p className="text-sm text-slate-400">Nechte AI inteligentně oříznout obrázek pro vylepšení kompozice.</p>
+                    <button onClick={handleAutoCrop} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                        {isLoading ? 'Ořezávám...' : 'Oříznout obrázek'}
+                    </button>
+                </div>
+            );
+        case 'replace-background':
+            return (
+                <div className="p-4 space-y-4 animate-fade-in-right">
+                    <BackgroundReplacementIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
+                    <h3 className="text-lg font-bold text-slate-100">Vyměnit pozadí</h3>
+                    <p className="text-sm text-slate-400">Popište nové pozadí, které chcete vložit do obrázku.</p>
+                    <textarea value={replaceBgPrompt} onChange={e => setReplaceBgPrompt(e.target.value)} rows={3} placeholder="např. 'rušná ulice v Tokiu v noci'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
+                    <button onClick={handleReplaceBg} disabled={isLoading || !replaceBgPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                        {isLoading ? 'Měním pozadí...' : 'Vyměnit pozadí'}
+                    </button>
+                </div>
+            );
+        case 'style-transfer':
+            return (
+                <div className="p-4 space-y-4 animate-fade-in-right">
+                     <StyleTransferIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
+                    <h3 className="text-lg font-bold text-slate-100">Přenos stylu</h3>
+                    <p className="text-sm text-slate-400">Vyberte obrázek, jehož styl chcete aplikovat na aktuální fotografii.</p>
+                    <input
+                        ref={styleFileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => setStyleTransferFile(e.target.files ? e.target.files[0] : null)}
+                        className="hidden"
+                    />
+                    <button onClick={() => styleFileInputRef.current?.click()} className="w-full flex items-center justify-center px-4 py-6 border-2 border-dashed border-slate-700 rounded-lg hover:border-cyan-500 transition-colors">
+                        {styleTransferFile ? (
+                            <p className="text-sm text-slate-300 break-all">{styleTransferFile.name}</p>
+                        ) : (
+                            <div className="text-center">
+                                <UploadIcon className="w-8 h-8 mx-auto text-slate-500"/>
+                                <p className="mt-2 text-sm text-slate-400">Vyberte obrázek stylu</p>
+                            </div>
+                        )}
+                    </button>
+                    <button onClick={handleStyleTransfer} disabled={isLoading || !styleTransferFile} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                        {isLoading ? 'Aplikuji styl...' : 'Aplikovat styl'}
+                    </button>
+                </div>
+            );
+        case 'user-presets':
+            return (
+                <div className="p-4 space-y-4 animate-fade-in-right">
+                    <div className="flex items-center gap-3"><PresetIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Uživatelské presety</h3></div>
+                    {props.userPresets.length > 0 ? (
+                        <div className="space-y-2">
+                            {props.userPresets.map(preset => (
+                                <button key={preset.id} className="w-full text-left p-2 rounded hover:bg-slate-800 transition-colors">
+                                    {preset.name}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-slate-500">Zatím nemáte žádné uložené presety.</p>
+                    )}
+                     <p className="text-sm text-slate-500 mt-4">Možnost ukládání a aplikace presetů bude brzy přidána.</p>
+                </div>
+            );
+        case 'history':
+            return (
+                <div className="p-4 space-y-4 animate-fade-in-right">
+                    <div className="flex items-center gap-3"><HistoryIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Historie úprav</h3></div>
+                    <div className="space-y-2 text-sm max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                        {[...history.past, history.present].slice().reverse().map((entry, index, arr) => (
+                            <div key={entry.actionName + index} className={`px-3 py-2 rounded-md ${index === 0 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 bg-slate-800/50'}`}>
+                               <span className="font-mono text-xs opacity-60 mr-2">{arr.length - 1 - index}</span> {entry.actionName}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        case 'export':
+             return (
+                <div className="p-4 space-y-5 animate-fade-in-right">
+                    <div className="flex items-center gap-3"><ExportIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Exportovat obrázek</h3></div>
+                    <div>
+                        <label className="text-sm font-medium text-slate-300">Formát</label>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button onClick={() => setExportOptions(o => ({...o, format: 'jpeg'}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.format === 'jpeg' ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>JPEG</button>
+                            <button onClick={() => setExportOptions(o => ({...o, format: 'png'}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.format === 'png' ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>PNG</button>
+                        </div>
+                    </div>
+                    {exportOptions.format === 'jpeg' && (
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-slate-300">Kvalita</label>
+                                <span className="text-sm font-mono text-slate-400 w-12 text-right">{exportOptions.quality}</span>
+                            </div>
+                            <input
+                                type="range" min="1" max="100" value={exportOptions.quality}
+                                onChange={(e) => setExportOptions(o => ({...o, quality: Number(e.target.value)}))}
+                                className="custom-slider"
+                            />
+                        </div>
+                    )}
+                     <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-300">Velikost</label>
+                         <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button onClick={() => setExportOptions(o => ({...o, scale: 1}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.scale === 1 ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>Původní</button>
+                            <button onClick={() => setExportOptions(o => ({...o, scale: 0.5}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.scale === 0.5 ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>Poloviční</button>
+                        </div>
+                    </div>
+                    <button onClick={handleDownload} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                        {isLoading ? 'Exportuji...' : 'Stáhnout obrázek'}
+                    </button>
+                </div>
+            );
       default:
         return (
-            <div className="p-8 text-center flex flex-col items-center justify-center h-full">
-                <LogoIcon className="w-16 h-16 text-cyan-500/50 mb-4" />
-                <h3 className="text-xl font-bold text-slate-200">Vítejte v editoru</h3>
-                <p className="text-slate-500 mt-2">Vyberte nástroj z levého menu pro zahájení úprav.</p>
-            </div>
+          <div className="p-4 animate-fade-in-right">
+            <h3 className="text-lg font-bold text-slate-100">Editor Artifex AI</h3>
+            <p className="text-slate-400 mt-2">Vyberte nástroj z levého menu a začněte s úpravami.</p>
+          </div>
         );
     }
   };
 
-  if (files.length === 0) {
+  if (!files || files.length === 0) {
       return (
-        <div className="w-full h-full flex flex-col">
-            <Header {...props} />
-             <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                <UploadIcon className="w-24 h-24 text-slate-700 mb-6" />
-                <h2 className="text-3xl font-bold text-slate-100">Žádné obrázky k úpravě</h2>
-                <p className="mt-2 text-lg text-slate-400">Prosím, nahrajte nejprve nějaké obrázky.</p>
-             </div>
-        </div>
+          <div className="w-full h-full flex flex-col">
+              <Header {...props} />
+              <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-500 p-8">
+                  <UploadIcon className="w-24 h-24 mb-6" />
+                  <h2 className="text-3xl font-bold text-slate-200">Editor je připraven</h2>
+                  <p className="mt-2 text-lg">Nahrajte prosím jeden nebo více obrázků pro zahájení úprav.</p>
+              </div>
+          </div>
       );
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col bg-slate-900 bg-grid-pattern">
       <Header {...props} />
-      <div className="flex-1 flex overflow-hidden">
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col relative overflow-hidden">
-          {/* Top Toolbar */}
-          <div className="flex-shrink-0 h-16 backdrop-blur-xl flex items-center justify-between px-4 border-b border-slate-800/50">
-            <div className="flex items-center gap-2">
-                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-500/10"><UndoIcon className="w-5 h-5" /></button>
-                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-500/10"><RedoIcon className="w-5 h-5" /></button>
+      <div className="flex-1 flex min-h-0">
+        {/* Action Panel */}
+        <div className="w-80 flex-shrink-0 bg-slate-950/70 backdrop-blur-xl border-r border-slate-800/50 overflow-y-auto custom-scrollbar">
+          {renderActionPanel()}
+        </div>
+
+        {/* Main Image View */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
+              <ArrowPathIcon className="w-12 h-12 text-fuchsia-500 animate-spin" />
+              <p className="mt-4 text-lg text-white font-semibold">{loadingMessage}</p>
             </div>
-            <p className="text-sm font-medium text-slate-300 truncate max-w-xs sm:max-w-sm md:max-w-md">{activeFile?.file.name}</p>
-             <div className="flex items-center gap-2">
-                 {activeFile && (
-                    <button onClick={() => setShowOriginal(p => !p)} onMouseDown={() => setShowOriginal(true)} onMouseUp={() => setShowOriginal(false)} onTouchStart={() => setShowOriginal(true)} onTouchEnd={() => setShowOriginal(false)} className="flex items-center gap-2 p-2 rounded-lg text-sm hover:bg-slate-500/10">
-                        <EyeIcon className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Původní</span>
-                    </button>
+          )}
+          {activeFile && (
+            <div className="relative w-full h-full flex items-center justify-center">
+                <img
+                    key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
+                    src={isComparing ? activeFile.originalPreviewUrl : (editedPreviewUrl || activeFile.previewUrl)}
+                    alt="Active"
+                    className={`max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-opacity duration-200 ${isGeneratingPreview ? 'opacity-70' : 'opacity-100'}`}
+                />
+                 {isGeneratingPreview && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                        <ArrowPathIcon className="w-8 h-8 text-white animate-spin" />
+                    </div>
+                 )}
+                 <button 
+                    onMouseDown={() => setIsComparing(true)}
+                    onMouseUp={() => setIsComparing(false)}
+                    onTouchStart={() => setIsComparing(true)}
+                    onTouchEnd={() => setIsComparing(false)}
+                    onMouseLeave={() => setIsComparing(false)} // Handle mouse leaving the button
+                    className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-slate-900/50 backdrop-blur-md rounded-lg border border-slate-700/50 text-sm font-medium z-10 select-none"
+                >
+                    <EyeIcon className="w-5 h-5"/>
+                    <span>{isComparing ? 'Původní' : 'Podržet pro porovnání'}</span>
+                 </button>
+                 {showFeedback && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 animate-fade-in-slide-up">
+                        <FeedbackButtons onFeedback={(f) => handleFeedback(showFeedback, f)} onTimeout={() => setShowFeedback(null)} />
+                    </div>
                  )}
             </div>
-          </div>
-          {/* Image Viewer */}
-          <div className="flex-1 bg-grid-pattern flex items-center justify-center p-4 relative overflow-auto">
-            {isLoading && (
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center text-white">
-                <svg className="animate-spin h-10 w-10 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <p className="text-lg font-semibold">{loadingMessage}</p>
-              </div>
-            )}
-            {activeFile && (
-              <img
-                key={activeFile.id + (showOriginal ? activeFile.originalPreviewUrl : activeFile.previewUrl)}
-                src={showOriginal ? activeFile.originalPreviewUrl : activeFile.previewUrl}
-                alt="Active file"
-                className="max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-all"
-                style={{ filter: `brightness(${100 + manualEdits.brightness}%) contrast(${100 + manualEdits.contrast}%) saturate(${100 + manualEdits.saturation}%)` }}
-              />
-            )}
-            {feedbackActionId && (
-                <div className="absolute bottom-4 right-4 z-10">
-                    <FeedbackButtons onFeedback={handleFeedback} onTimeout={() => setFeedbackActionId(null)} />
-                </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Right Sidebar */}
-        <aside className="w-80 flex-shrink-0 border-l border-slate-800/50 backdrop-blur-xl flex flex-col">
-          <div className="flex-1 overflow-y-auto">
-            {error && (
-              <div className="p-4 m-4 bg-red-500/10 text-red-300 border border-red-500/20 rounded-lg text-sm">
-                <p className="font-bold mb-1">Došlo k chybě</p>
-                {error}
-              </div>
-            )}
-            {renderActiveActionPanel()}
-          </div>
-        </aside>
-      </div>
-      
-      {/* Filmstrip */}
-      <div className="flex-shrink-0 h-28 backdrop-blur-lg border-t border-slate-800/50 p-2">
-        <div className="h-full flex items-center space-x-3 overflow-x-auto">
-          {files.map(file => (
-            <button 
-                key={file.id} 
-                onClick={() => onSetActiveFileId(file.id)}
-                className={`h-24 w-24 flex-shrink-0 rounded-lg overflow-hidden relative transition-all duration-200 focus:outline-none ${file.id === activeFileId ? 'ring-4 ring-cyan-500 ring-offset-2 ring-offset-slate-950' : 'hover:scale-105'}`}
-            >
-              <img src={file.previewUrl} alt={file.file.name} className="w-full h-full object-cover"/>
-              {file.isAnalyzing && (
-                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                 </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
-// --- Sub-components for EditorView ---
-
-interface AnalysisPanelProps {
-  file: UploadedFile;
-  onAnalyze: () => void;
-  isLoading: boolean;
-}
-
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ file, onAnalyze, isLoading }) => {
-  return (
-    <div className="p-4 space-y-6 animate-fade-in-right">
-      <div>
-        <h3 className="text-lg font-bold text-slate-100">AI Analýza</h3>
-        <p className="text-sm text-slate-500 mt-1">Získejte podrobný rozbor vaší fotografie, včetně technických údajů a návrhů na vylepšení.</p>
-      </div>
-      
-      {!file.analysis ? (
-        <button onClick={onAnalyze} disabled={isLoading} className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition">
-          <AnalysisIcon className="w-5 h-5 mr-2" />
-          {isLoading ? 'Analyzuji...' : 'Analyzovat obrázek'}
-        </button>
-      ) : (
-        <div className="space-y-4 text-sm">
-          <div>
-            <h4 className="font-semibold text-slate-200 mb-1">Popis</h4>
-            <p className="text-slate-400">{file.analysis.description}</p>
-          </div>
-          <div>
-            <h4 className="font-semibold text-slate-200 mb-2">Návrhy na vylepšení</h4>
-            <ul className="list-disc list-inside space-y-1 text-slate-400">
-              {file.analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-semibold text-slate-200 mb-2">Technické informace</h4>
-            <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-slate-800 p-2 rounded-md">
-                    <p className="text-xs text-slate-500">ISO</p>
-                    <p className="font-mono font-semibold">{file.analysis.technicalInfo.ISO}</p>
-                </div>
-                 <div className="bg-slate-800 p-2 rounded-md">
-                    <p className="text-xs text-slate-500">Clona</p>
-                    <p className="font-mono font-semibold">{file.analysis.technicalInfo.Aperture}</p>
-                </div>
-                 <div className="bg-slate-800 p-2 rounded-md">
-                    <p className="text-xs text-slate-500">Závěrka</p>
-                    <p className="font-mono font-semibold">{file.analysis.technicalInfo.ShutterSpeed}</p>
-                </div>
+          )}
+           <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
+                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><UndoIcon className="w-5 h-5" /></button>
+                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><RedoIcon className="w-5 h-5" /></button>
             </div>
-          </div>
-          <button onClick={onAnalyze} disabled={isLoading} className="w-full text-sm font-medium text-cyan-400 hover:underline pt-2">
-            Analyzovat znovu
-          </button>
         </div>
-      )}
+
+        {/* Filmstrip */}
+        <div className="w-32 flex-shrink-0 bg-slate-950/70 backdrop-blur-lg border-l border-slate-800/50 p-2 overflow-y-auto custom-scrollbar">
+            <div className="flex flex-col space-y-2">
+                {files.map(file => (
+                    <button key={file.id} onClick={() => onSetActiveFileId(file.id)} className={`relative aspect-square w-full rounded-md overflow-hidden focus:outline-none group transition-all duration-200 ${activeFileId === file.id ? 'ring-2 ring-offset-2 ring-offset-slate-950 ring-cyan-500' : 'hover:scale-105'}`}>
+                        <img src={file.previewUrl} alt="thumbnail" className="w-full h-full object-cover" />
+                        <div className={`absolute inset-0 bg-black/50 transition-opacity ${activeFileId === file.id ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}></div>
+                    </button>
+                ))}
+            </div>
+        </div>
+      </div>
     </div>
   );
 };
-
-interface SimpleActionPanelProps {
-    title: string;
-    description: string;
-    icon: React.ReactNode;
-    onAction: () => void;
-    actionText: string;
-    isLoading: boolean;
-}
-
-const SimpleActionPanel: React.FC<SimpleActionPanelProps> = ({ title, description, icon, onAction, actionText, isLoading }) => (
-    <div className="p-4 animate-fade-in-right flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-500 mb-4">
-            {icon}
-        </div>
-        <h3 className="text-lg font-bold text-slate-100">{title}</h3>
-        <p className="text-sm text-slate-500 mt-1 mb-6 max-w-xs">{description}</p>
-        <button onClick={onAction} disabled={isLoading} className="w-full inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 transition">
-          {isLoading ? 'Pracuji...' : actionText}
-        </button>
-    </div>
-);
-
 
 export default EditorView;

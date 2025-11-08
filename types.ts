@@ -33,6 +33,8 @@ export interface ManualEdits {
   shadows: number;
   highlights: number;
   clarity: number;
+  sharpness: number;
+  noiseReduction: number;
   crop?: CropCoordinates;
 }
 
@@ -79,6 +81,8 @@ export interface AutopilotTendencies {
   shadows: number;
   highlights: number;
   clarity: number;
+  sharpness: number;
+  noiseReduction: number;
 }
 
 export type Feedback = 'good' | 'bad';

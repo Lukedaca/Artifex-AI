@@ -49,6 +49,8 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({ edits, onEditCh
       <Slider label="Stíny" value={edits.shadows} onChange={(v) => onEditChange('shadows', v)} />
       <Slider label="Světlé tóny" value={edits.highlights} onChange={(v) => onEditChange('highlights', v)} />
       <Slider label="Zřetelnost" value={edits.clarity} min={0} onChange={(v) => onEditChange('clarity', v)} />
+      <Slider label="Ostrost" value={edits.sharpness} min={0} onChange={(v) => onEditChange('sharpness', v)} />
+      <Slider label="Redukce šumu" value={edits.noiseReduction} min={0} onChange={(v) => onEditChange('noiseReduction', v)} />
     </div>
   );
 };
