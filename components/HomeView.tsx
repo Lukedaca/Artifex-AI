@@ -22,7 +22,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onEnterApp }) => {
 
       <div className="relative z-10 flex flex-col items-center">
         <div className="animate-fade-in-up">
-            <LogoIcon className="w-24 h-24 text-cyan-400" />
+            <LogoIcon className="w-24 h-24 text-cyan-400 mx-auto" />
             <h1 className="mt-6 text-6xl md:text-7xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">
             Artifex AI
             </h1>
