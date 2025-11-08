@@ -68,7 +68,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [isComparing, setIsComparing] = useState(false);
   const [editedPreviewUrl, setEditedPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
@@ -83,6 +82,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         quality: 90,
         scale: 1,
     });
+  // State for comparison slider
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareSliderPosition, setCompareSliderPosition] = useState(50); // Percentage
+  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
+  const imageBoundsRef = useRef<HTMLDivElement>(null);
+
 
   const [showFeedback, setShowFeedback] = useState<string | null>(null); // actionId for feedback
 
@@ -91,6 +96,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   // When active file changes, reset the manual edits and clear the live preview.
   useEffect(() => {
       setManualEdits(INITIAL_EDITS);
+      setIsCompareMode(false); // Exit compare mode when file changes
   }, [activeFileId]);
 
   // Effect to generate a live preview when manual edits change
@@ -138,6 +144,41 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           }
       };
   }, [editedPreviewUrl]);
+
+  // --- Comparison Slider Drag Logic ---
+  const handleSliderMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isDraggingSlider || !imageBoundsRef.current) return;
+
+    const rect = imageBoundsRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const x = clientX - rect.left;
+    let newPosition = (x / rect.width) * 100;
+    
+    // Clamp between 0 and 100
+    newPosition = Math.max(0, Math.min(100, newPosition));
+
+    setCompareSliderPosition(newPosition);
+  }, [isDraggingSlider]);
+
+  const handleSliderInteractionEnd = useCallback(() => {
+      setIsDraggingSlider(false);
+  }, []);
+
+  useEffect(() => {
+      if (isDraggingSlider) {
+          window.addEventListener('mousemove', handleSliderMove);
+          window.addEventListener('touchmove', handleSliderMove);
+          window.addEventListener('mouseup', handleSliderInteractionEnd);
+          window.addEventListener('touchend', handleSliderInteractionEnd);
+      }
+
+      return () => {
+          window.removeEventListener('mousemove', handleSliderMove);
+          window.removeEventListener('touchmove', handleSliderMove);
+          window.removeEventListener('mouseup', handleSliderInteractionEnd);
+          window.removeEventListener('touchend', handleSliderInteractionEnd);
+      };
+  }, [isDraggingSlider, handleSliderMove, handleSliderInteractionEnd]);
 
   
   const updateFile = useCallback((fileId: string, updates: Partial<UploadedFile>, actionName: string) => {
@@ -482,31 +523,68 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             </div>
           )}
           {activeFile && (
-            <div className="relative w-full h-full flex items-center justify-center">
-                <img
-                    key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
-                    src={isComparing ? activeFile.originalPreviewUrl : (editedPreviewUrl || activeFile.previewUrl)}
-                    alt="Active"
-                    className={`max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-opacity duration-200 ${isGeneratingPreview ? 'opacity-70' : 'opacity-100'}`}
-                />
-                 {isGeneratingPreview && (
+            <div className="relative w-full h-full flex items-center justify-center select-none">
+                {isCompareMode ? (
+                  <div ref={imageBoundsRef} className="relative max-w-full max-h-full shadow-2xl rounded-lg">
+                      {/* Before Image (bottom layer) */}
+                      <img
+                          src={activeFile.originalPreviewUrl}
+                          alt="Original"
+                          className="block max-w-full max-h-full object-contain rounded-lg"
+                          draggable="false"
+                      />
+                      
+                      {/* After Image (top layer, clipped) */}
+                      <div 
+                          className="absolute top-0 left-0 w-full h-full overflow-hidden rounded-lg"
+                          style={{ clipPath: `inset(0 ${100 - compareSliderPosition}% 0 0)` }}
+                      >
+                          <img
+                              key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
+                              src={editedPreviewUrl || activeFile.previewUrl}
+                              alt="Edited"
+                              className="block max-w-full max-h-full object-contain absolute top-0 left-0 w-full h-full"
+                              draggable="false"
+                          />
+                      </div>
+
+                      {/* Slider Divider and Handle */}
+                      <div
+                          className="absolute top-0 bottom-0 w-1 cursor-ew-resize flex items-center justify-center z-10"
+                          style={{ left: `${compareSliderPosition}%`, transform: 'translateX(-50%)' }}
+                          onMouseDown={(e) => { e.preventDefault(); setIsDraggingSlider(true); }}
+                          onTouchStart={(e) => { e.preventDefault(); setIsDraggingSlider(true); }}
+                          draggable="false"
+                      >
+                          <div className="absolute w-1 h-full bg-cyan-400 opacity-75 shadow-lg"></div>
+                          <div className="absolute w-10 h-10 rounded-full bg-slate-900/50 backdrop-blur-sm border-2 border-cyan-400 flex items-center justify-center text-cyan-400">
+                              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h14m-5 5l5-5m0 0l-5-5" /></svg>
+                          </div>
+                      </div>
+                  </div>
+                ) : (
+                  <img
+                      key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
+                      src={editedPreviewUrl || activeFile.previewUrl}
+                      alt="Active"
+                      className={`max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-opacity duration-200 ${isGeneratingPreview ? 'opacity-70' : 'opacity-100'}`}
+                      draggable="false"
+                  />
+                )}
+                 {isGeneratingPreview && !isCompareMode && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                         <ArrowPathIcon className="w-8 h-8 text-white animate-spin" />
                     </div>
                  )}
                  <button 
-                    onMouseDown={() => setIsComparing(true)}
-                    onMouseUp={() => setIsComparing(false)}
-                    onTouchStart={() => setIsComparing(true)}
-                    onTouchEnd={() => setIsComparing(false)}
-                    onMouseLeave={() => setIsComparing(false)} // Handle mouse leaving the button
-                    className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-slate-900/50 backdrop-blur-md rounded-lg border border-slate-700/50 text-sm font-medium z-10 select-none"
-                >
+                    onClick={() => setIsCompareMode(p => !p)}
+                    className={`absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-slate-900/50 backdrop-blur-md rounded-lg border border-slate-700/50 text-sm font-medium z-30 select-none transition-colors ${isCompareMode ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : ''}`}
+                 >
                     <EyeIcon className="w-5 h-5"/>
-                    <span>{isComparing ? 'Původní' : 'Podržet pro porovnání'}</span>
+                    <span>{isCompareMode ? 'Ukončit porovnání' : 'Porovnat s originálem'}</span>
                  </button>
                  {showFeedback && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 animate-fade-in-slide-up">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 animate-fade-in-slide-up">
                         <FeedbackButtons onFeedback={(f) => handleFeedback(showFeedback, f)} onTimeout={() => setShowFeedback(null)} />
                     </div>
                  )}
