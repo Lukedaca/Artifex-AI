@@ -1,16 +1,23 @@
 import { GoogleGenAI, Type, Modality } from '@google/genai';
 import type { AnalysisResult } from '../types';
 import { fileToBase64, base64ToFile } from '../utils/imageProcessor';
+import { getApiKey } from '../utils/apiKey';
 
 // Helper to create a new GenAI instance for each request
 // This ensures the most up-to-date API key is used, as per guidelines
-const getGenAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const getGenAI = async () => {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
+    throw new Error('API klíč není nastaven. Prosím, zadejte API klíč v nastavení.');
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 /**
  * Analyzes an image to provide a description, technical info, and improvement suggestions.
  */
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
-  const ai = getGenAI();
+  const ai = await getGenAI();
   const base64Image = await fileToBase64(file);
 
   const response = await ai.models.generateContent({
@@ -68,7 +75,7 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
 
 // Generic function for image-in, image-out editing tasks
 const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2.5-flash-image'): Promise<{ file: File }> => {
-    const ai = getGenAI();
+    const ai = await getGenAI();
     const base64Image = await fileToBase64(file);
 
     const response = await ai.models.generateContent({
@@ -130,7 +137,7 @@ export const replaceBackground = async (file: File, newBackgroundPrompt: string)
  * Applies the style of one image to another.
  */
 export const styleTransfer = async (originalFile: File, styleFile: File): Promise<{ file: File }> => {
-    const ai = getGenAI();
+    const ai = await getGenAI();
     const [originalBase64, styleBase64] = await Promise.all([
         fileToBase64(originalFile),
         fileToBase64(styleFile)
@@ -165,7 +172,7 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
  * Generates a new image from a text prompt using Imagen.
  */
 export const generateImage = async (prompt: string): Promise<string> => {
-  const ai = getGenAI();
+  const ai = await getGenAI();
   const response = await ai.models.generateImages({
     model: 'imagen-4.0-generate-001',
     prompt,
