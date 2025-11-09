@@ -9,11 +9,65 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?v=3.1"></script>
   <style>
+    /* CSS Variables for Design System */
+    :root {
+      --color-primary: #22d3ee; /* cyan-400 */
+      --color-secondary: #d946ef; /* fuchsia-500 */
+      --color-accent: #a855f7; /* purple-500 */
+      --color-success: #10b981; /* emerald-500 */
+      --color-error: #ef4444; /* red-500 */
+      --color-warning: #f59e0b; /* amber-500 */
+
+      --spacing-unit: 4px;
+      --border-radius-sm: 8px;
+      --border-radius-md: 12px;
+      --border-radius-lg: 16px;
+      --border-radius-xl: 24px;
+
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
     body {
       margin: 0;
       font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       /* Background is now controlled by the App component for consistency */
     }
+
+    /* Custom Scrollbar */
+    .custom-scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 9999px;
+      transition: background var(--transition-base);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.5);
+    }
+
     .noise-bg {
       position: relative;
     }
@@ -30,85 +84,151 @@
       z-index: -1;
     }
 
-    /* Aurora Glow Effects */
+    /* Aurora Glow Effects - Enhanced */
     .aurora-glow {
-      --glow-color-1: #22d3ee; /* cyan-400 */
-      --glow-color-2: #d946ef; /* fuchsia-500 */
-      box-shadow: 0 0 15px -2px color-mix(in srgb, var(--glow-color-1) 50%, transparent),
-                  0 0 15px -2px color-mix(in srgb, var(--glow-color-2) 50%, transparent);
-      transition: box-shadow 0.3s ease-in-out;
+      --glow-color-1: var(--color-primary);
+      --glow-color-2: var(--color-secondary);
+      box-shadow: 0 0 20px -3px color-mix(in srgb, var(--glow-color-1) 50%, transparent),
+                  0 0 20px -3px color-mix(in srgb, var(--glow-color-2) 50%, transparent);
+      transition: box-shadow var(--transition-slow);
     }
+
+    .aurora-glow:hover {
+      box-shadow: 0 0 30px -3px color-mix(in srgb, var(--glow-color-1) 70%, transparent),
+                  0 0 30px -3px color-mix(in srgb, var(--glow-color-2) 70%, transparent);
+    }
+
     .aurora-glow-strong {
-      --glow-color-1: #22d3ee;
-      --glow-color-2: #d946ef;
-      box-shadow: 0 0 30px -5px color-mix(in srgb, var(--glow-color-1) 70%, transparent),
-                  0 0 30px -5px color-mix(in srgb, var(--glow-color-2) 70%, transparent);
+      --glow-color-1: var(--color-primary);
+      --glow-color-2: var(--color-secondary);
+      box-shadow: 0 0 40px -5px color-mix(in srgb, var(--glow-color-1) 80%, transparent),
+                  0 0 40px -5px color-mix(in srgb, var(--glow-color-2) 80%, transparent);
     }
+
     .aurora-text-glow {
-        text-shadow: 0 0 8px color-mix(in srgb, #22d3ee 50%, transparent), 
-                     0 0 12px color-mix(in srgb, #d946ef 30%, transparent);
+      text-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 60%, transparent),
+                   0 0 20px color-mix(in srgb, var(--color-secondary) 40%, transparent);
     }
 
     /* Marching Ants Animation for Upload */
     @keyframes marching-ants {
-        to {
-            stroke-dashoffset: -20;
-        }
+      to {
+        stroke-dashoffset: -20;
+      }
     }
     .marching-ants {
-        animation: marching-ants 1s linear infinite;
+      animation: marching-ants 1s linear infinite;
     }
-    
-    /* Custom Slider Styles */
+
+    /* Custom Slider Styles - Enhanced */
     .custom-slider {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
       height: 6px;
-      background: rgba(100, 116, 139, 0.3); /* slate-500/30 */
+      background: rgba(100, 116, 139, 0.3);
       border-radius: 9999px;
       outline: none;
-      transition: opacity .2s;
+      transition: all var(--transition-base);
+      cursor: pointer;
     }
+
+    .custom-slider:hover {
+      background: rgba(100, 116, 139, 0.4);
+    }
+
     .custom-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
       width: 20px;
       height: 20px;
-      background: #1e293b; /* slate-800 */
-      border: 2px solid #a855f7; /* fuchsia-500 */
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 2.5px solid var(--color-accent);
       border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #a855f7;
+      cursor: grab;
+      transition: all var(--transition-base);
+      box-shadow: 0 0 15px -2px var(--color-accent),
+                  0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
+
     .custom-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.1);
+      transform: scale(1.15);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 20px -2px var(--color-primary),
+                  0 6px 8px -1px rgba(0, 0, 0, 0.4);
     }
-     .custom-slider::-moz-range-thumb {
+
+    .custom-slider::-webkit-slider-thumb:active {
+      cursor: grabbing;
+      transform: scale(1.1);
+    }
+
+    .custom-slider::-moz-range-thumb {
       width: 20px;
       height: 20px;
-      background: #1e293b; /* slate-800 */
-      border: 2px solid #a855f7; /* fuchsia-500 */
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 2.5px solid var(--color-accent);
       border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #a855f7;
+      cursor: grab;
+      transition: all var(--transition-base);
+      box-shadow: 0 0 15px -2px var(--color-accent),
+                  0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .custom-slider::-moz-range-thumb:hover {
+      transform: scale(1.15);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 20px -2px var(--color-primary),
+                  0 6px 8px -1px rgba(0, 0, 0, 0.4);
     }
 
     /* Editor View Grid Pattern */
     .bg-grid-pattern {
-        background-image: 
-            linear-gradient(rgba(71, 85, 105, 0.5) 1px, transparent 1px),
-            linear-gradient(to right, rgba(71, 85, 105, 0.5) 1px, transparent 1px);
-        background-size: 2rem 2rem;
+      background-image:
+        linear-gradient(rgba(71, 85, 105, 0.08) 1px, transparent 1px),
+        linear-gradient(to right, rgba(71, 85, 105, 0.08) 1px, transparent 1px);
+      background-size: 2rem 2rem;
     }
 
-    /* Animation for Notifications */
+    /* Shimmer Loading Effect */
+    @keyframes shimmer {
+      0% {
+        background-position: -1000px 0;
+      }
+      100% {
+        background-position: 1000px 0;
+      }
+    }
+
+    .shimmer {
+      background: linear-gradient(
+        90deg,
+        rgba(30, 41, 59, 0.4) 0%,
+        rgba(71, 85, 105, 0.6) 50%,
+        rgba(30, 41, 59, 0.4) 100%
+      );
+      background-size: 1000px 100%;
+      animation: shimmer 2s infinite linear;
+    }
+
+    /* Skeleton Screen */
+    .skeleton {
+      background: linear-gradient(
+        90deg,
+        rgba(30, 41, 59, 0.6) 25%,
+        rgba(51, 65, 85, 0.8) 50%,
+        rgba(30, 41, 59, 0.6) 75%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: var(--border-radius-md);
+    }
+
+    /* Smooth Animations */
     @keyframes fade-in-right {
       from {
         opacity: 0;
-        transform: translateX(24px);
+        transform: translateX(20px);
       }
       to {
         opacity: 1;
@@ -116,14 +236,13 @@
       }
     }
     .animate-fade-in-right {
-      animation: fade-in-right 0.3s ease-out forwards;
+      animation: fade-in-right var(--transition-slow) ease-out forwards;
     }
 
-    /* Animation for HomeView */
     @keyframes fade-in-up {
       from {
         opacity: 0;
-        transform: translateY(24px);
+        transform: translateY(30px);
       }
       to {
         opacity: 1;
@@ -131,14 +250,13 @@
       }
     }
     .animate-fade-in-up {
-      animation: fade-in-up 0.6s ease-out forwards;
+      animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-    
-    /* Animation for Editor Panel Content */
+
     @keyframes fade-in-slide-up {
       from {
         opacity: 0;
-        transform: translateY(16px);
+        transform: translateY(12px);
       }
       to {
         opacity: 1;
@@ -146,20 +264,156 @@
       }
     }
     .animate-fade-in-slide-up {
-      animation: fade-in-slide-up 0.4s ease-out forwards;
+      animation: fade-in-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    .animate-fade-in {
+      animation: fade-in 0.3s ease-out forwards;
+    }
+
+    @keyframes scale-in {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    .animate-scale-in {
+      animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
     .animate-pulse-slow {
-        animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 
     @keyframes pulse {
-        50% {
-            opacity: .5;
-        }
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .animation-delay-100 {
+      animation-delay: 100ms;
+    }
+    .animation-delay-200 {
+      animation-delay: 200ms;
+    }
+    .animation-delay-300 {
+      animation-delay: 300ms;
+    }
+    .animation-delay-400 {
+      animation-delay: 400ms;
+    }
+    .animation-delay-500 {
+      animation-delay: 500ms;
     }
     .animation-delay-2000 {
-        animation-delay: 2s;
+      animation-delay: 2s;
+    }
+
+    /* Toast Notifications */
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateY(-100%) scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes toast-out {
+      from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-100%) scale(0.9);
+      }
+    }
+
+    .toast-enter {
+      animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .toast-exit {
+      animation: toast-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    /* Focus Visible Styles for Accessibility */
+    *:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+      border-radius: var(--border-radius-sm);
+    }
+
+    /* Improved Button States */
+    .btn-primary {
+      position: relative;
+      overflow: hidden;
+      transition: all var(--transition-base);
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn-primary:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    /* Card Hover Effects */
+    .card-interactive {
+      transition: all var(--transition-base);
+    }
+
+    .card-interactive:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-xl);
+    }
+
+    /* Gradient Background Animation */
+    @keyframes gradient-shift {
+      0% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    .gradient-animated {
+      background-size: 200% 200%;
+      animation: gradient-shift 6s ease infinite;
     }
   </style>
   <script type="importmap">

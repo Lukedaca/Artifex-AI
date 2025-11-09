@@ -206,7 +206,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
               previewUrl: newPreviewUrl,
               analysis: undefined // Clear old analysis
           }, actionName);
-          addNotification(`${actionName} byl úspěšně aplikován.`, 'info');
+          addNotification(`${actionName} byl úspěšně aplikován.`, 'success');
           setShowFeedback(actionId);
       } catch (e) {
           addNotification(getApiErrorMessage(e, `Nepodařilo se aplikovat ${actionName}.`), 'error');
@@ -224,7 +224,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     try {
       const result = await geminiService.analyzeImage(activeFile.file);
       updateFile(activeFile.id, { analysis: result, isAnalyzing: false }, 'Analysis Complete');
-      addNotification('Analýza obrázku dokončena.', 'info');
+      addNotification('Analýza obrázku dokončena.', 'success');
     } catch (e) {
       addNotification(getApiErrorMessage(e, 'Analýza selhala.'), 'error');
       updateFile(activeFile.id, { isAnalyzing: false }, 'Analysis Failed');
@@ -247,7 +247,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const handleFeedback = (actionId: string, feedback: Feedback) => {
     recordExplicitFeedback(actionId, feedback);
-    addNotification('Děkujeme za zpětnou vazbu!', 'info');
+    addNotification('Děkujeme za zpětnou vazbu!', 'success');
   };
 
   const handleProactiveSuggestion = (suggestion: ProactiveSuggestion) => {
@@ -294,7 +294,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             document.body.removeChild(link);
             
             URL.revokeObjectURL(link.href);
-            addNotification('Obrázek byl úspěšně stažen.', 'info');
+            addNotification('Obrázek byl úspěšně stažen.', 'success');
 
         } catch (e) {
             console.error('Download failed', e);
@@ -348,7 +348,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                 <AutopilotIcon className="w-16 h-16 mx-auto text-cyan-400"/>
                 <h3 className="text-lg font-bold text-slate-100">Autopilot AI</h3>
                 <p className="text-sm text-slate-400">Nechte AI automaticky vylepšit váš obrázek jedním kliknutím.</p>
-                <button onClick={handleAutopilot} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                <button
+                    onClick={handleAutopilot}
+                    disabled={isLoading}
+                    aria-label="Spustit AI Autopilot"
+                    className="w-full btn-primary aurora-glow inline-flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                >
                     {isLoading ? 'Pracuji...' : 'Spustit Autopilot'}
                 </button>
             </div>
@@ -358,8 +363,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             <div className="p-4 space-y-4 animate-fade-in-right">
                 <h3 className="text-lg font-bold text-slate-100">Odstranit objekt</h3>
                 <p className="text-sm text-slate-400">Popište objekt, který chcete z obrázku odstranit.</p>
-                <textarea value={removeObjectPrompt} onChange={e => setRemoveObjectPrompt(e.target.value)} rows={3} placeholder="např. 'modré auto v pozadí'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
-                <button onClick={handleRemoveObject} disabled={isLoading || !removeObjectPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                <textarea
+                    value={removeObjectPrompt}
+                    onChange={e => setRemoveObjectPrompt(e.target.value)}
+                    rows={3}
+                    placeholder="např. 'modré auto v pozadí'"
+                    aria-label="Popis objektu k odstranění"
+                    className="w-full bg-slate-800 rounded-xl p-3 text-sm text-slate-200 placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent border border-slate-700 transition-all"
+                ></textarea>
+                <button
+                    onClick={handleRemoveObject}
+                    disabled={isLoading || !removeObjectPrompt.trim()}
+                    aria-label="Odstranit objekt z obrázku"
+                    className="w-full btn-primary aurora-glow inline-flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                >
                     {isLoading ? 'Odstraňuji...' : 'Odstranit'}
                 </button>
             </div>
@@ -370,7 +387,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                     <AutoCropIcon className="w-16 h-16 mx-auto text-cyan-400"/>
                     <h3 className="text-lg font-bold text-slate-100">Automatické oříznutí</h3>
                     <p className="text-sm text-slate-400">Nechte AI inteligentně oříznout obrázek pro vylepšení kompozice.</p>
-                    <button onClick={handleAutoCrop} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                    <button
+                        onClick={handleAutoCrop}
+                        disabled={isLoading}
+                        aria-label="Automaticky oříznout obrázek"
+                        className="w-full btn-primary aurora-glow inline-flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                    >
                         {isLoading ? 'Ořezávám...' : 'Oříznout obrázek'}
                     </button>
                 </div>
@@ -381,8 +403,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                     <BackgroundReplacementIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
                     <h3 className="text-lg font-bold text-slate-100">Vyměnit pozadí</h3>
                     <p className="text-sm text-slate-400">Popište nové pozadí, které chcete vložit do obrázku.</p>
-                    <textarea value={replaceBgPrompt} onChange={e => setReplaceBgPrompt(e.target.value)} rows={3} placeholder="např. 'rušná ulice v Tokiu v noci'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
-                    <button onClick={handleReplaceBg} disabled={isLoading || !replaceBgPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                    <textarea
+                        value={replaceBgPrompt}
+                        onChange={e => setReplaceBgPrompt(e.target.value)}
+                        rows={3}
+                        placeholder="např. 'rušná ulice v Tokiu v noci'"
+                        aria-label="Popis nového pozadí"
+                        className="w-full bg-slate-800 rounded-xl p-3 text-sm text-slate-200 placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent border border-slate-700 transition-all"
+                    ></textarea>
+                    <button
+                        onClick={handleReplaceBg}
+                        disabled={isLoading || !replaceBgPrompt.trim()}
+                        aria-label="Vyměnit pozadí obrázku"
+                        className="w-full btn-primary aurora-glow inline-flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                    >
                         {isLoading ? 'Měním pozadí...' : 'Vyměnit pozadí'}
                     </button>
                 </div>
@@ -410,7 +444,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                             </div>
                         )}
                     </button>
-                    <button onClick={handleStyleTransfer} disabled={isLoading || !styleTransferFile} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
+                    <button
+                        onClick={handleStyleTransfer}
+                        disabled={isLoading || !styleTransferFile}
+                        aria-label="Aplikovat styl na obrázek"
+                        className="w-full btn-primary aurora-glow inline-flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                    >
                         {isLoading ? 'Aplikuji styl...' : 'Aplikovat styl'}
                     </button>
                 </div>
@@ -477,8 +516,22 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                             <button onClick={() => setExportOptions(o => ({...o, scale: 0.5}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.scale === 0.5 ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>Poloviční</button>
                         </div>
                     </div>
-                    <button onClick={handleDownload} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                        {isLoading ? 'Exportuji...' : 'Stáhnout obrázek'}
+                    <button
+                        onClick={handleDownload}
+                        disabled={isLoading}
+                        aria-label="Stáhnout upravený obrázek"
+                        className="w-full btn-primary aurora-glow inline-flex items-center justify-center gap-2 px-4 py-3 mt-4 border border-transparent text-base font-bold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                        {isLoading ? (
+                            'Exportuji...'
+                        ) : (
+                            <>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Stáhnout obrázek
+                            </>
+                        )}
                     </button>
                 </div>
             );
@@ -517,9 +570,21 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         {/* Main Image View */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
           {isLoading && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
-              <ArrowPathIcon className="w-12 h-12 text-fuchsia-500 animate-spin" />
-              <p className="mt-4 text-lg text-white font-semibold">{loadingMessage}</p>
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-20 flex flex-col items-center justify-center animate-fade-in">
+              <div className="relative">
+                {/* Spinning gradient ring */}
+                <div className="w-20 h-20 rounded-full border-4 border-slate-700/30 border-t-cyan-400 border-r-fuchsia-500 animate-spin"></div>
+                {/* Inner pulsing circle */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500/20 to-fuchsia-500/20 animate-pulse-slow"></div>
+                </div>
+              </div>
+              <p className="mt-6 text-lg text-white font-semibold animate-fade-in-up">{loadingMessage}</p>
+              <div className="mt-3 flex gap-1">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse animation-delay-100"></div>
+                <div className="w-2 h-2 rounded-full bg-fuchsia-400 animate-pulse animation-delay-200"></div>
+                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse animation-delay-300"></div>
+              </div>
             </div>
           )}
           {activeFile && (
@@ -576,9 +641,14 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                         <ArrowPathIcon className="w-8 h-8 text-white animate-spin" />
                     </div>
                  )}
-                 <button 
+                 <button
                     onClick={() => setIsCompareMode(p => !p)}
-                    className={`absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-slate-900/50 backdrop-blur-md rounded-lg border border-slate-700/50 text-sm font-medium z-30 select-none transition-colors ${isCompareMode ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : ''}`}
+                    aria-label={isCompareMode ? 'Ukončit režim porovnání' : 'Porovnat s originálem'}
+                    className={`absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2.5 bg-slate-900/70 backdrop-blur-md rounded-xl border text-sm font-semibold z-30 select-none transition-all hover:scale-105 active:scale-100 shadow-lg ${
+                        isCompareMode
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30'
+                            : 'border-slate-700/50 text-slate-300 hover:bg-slate-800/70 hover:border-slate-600'
+                    }`}
                  >
                     <EyeIcon className="w-5 h-5"/>
                     <span>{isCompareMode ? 'Ukončit porovnání' : 'Porovnat s originálem'}</span>
@@ -591,8 +661,22 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             </div>
           )}
            <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
-                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><UndoIcon className="w-5 h-5" /></button>
-                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><RedoIcon className="w-5 h-5" /></button>
+                <button
+                    onClick={onUndo}
+                    disabled={history.past.length === 0}
+                    aria-label="Vrátit zpět (Ctrl+Z)"
+                    className="p-3 bg-slate-800/80 backdrop-blur-sm rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700 hover:scale-110 transition-all shadow-lg border border-slate-700/50"
+                >
+                    <UndoIcon className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={onRedo}
+                    disabled={history.future.length === 0}
+                    aria-label="Znovu (Ctrl+Y)"
+                    className="p-3 bg-slate-800/80 backdrop-blur-sm rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700 hover:scale-110 transition-all shadow-lg border border-slate-700/50"
+                >
+                    <RedoIcon className="w-5 h-5" />
+                </button>
             </div>
         </div>
 
