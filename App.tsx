@@ -10,7 +10,7 @@ import GenerateImageView from './components/GenerateImageView';
 // Components
 import Sidebar from './components/Sidebar';
 import ApiKeyModal from './components/ApiKeyModal';
-import { XCircleIcon } from './components/icons';
+import { ToastContainer } from './components/ToastNotification';
 
 // Types
 import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } from './types';
@@ -67,7 +67,7 @@ function historyReducer(state: History, action: { type: 'SET'; payload: HistoryE
 interface Notification {
   id: number;
   message: string;
-  type: 'info' | 'error';
+  type: 'info' | 'error' | 'success' | 'warning';
 }
 
 function App() {
@@ -127,7 +127,7 @@ function App() {
     }
   }, [files, activeFileId]);
 
-  const addNotification = useCallback((message: string, type: 'info' | 'error' = 'info') => {
+  const addNotification = useCallback((message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
     const id = Date.now();
     setNotifications(n => [...n, { id, message, type }]);
     setTimeout(() => {
@@ -276,16 +276,10 @@ function App() {
         
         <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
 
-        <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
-            {notifications.map(n => (
-                <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-200'}`}>
-                    <span className="flex-1">{n.message}</span>
-                    <button onClick={() => setNotifications(current => current.filter(notif => notif.id !== n.id))} className="ml-4 -mr-1 p-1 rounded-full hover:bg-black/10">
-                        <XCircleIcon className="w-5 h-5" />
-                    </button>
-                </div>
-            ))}
-        </div>
+        <ToastContainer
+          notifications={notifications}
+          onClose={(id) => setNotifications(current => current.filter(notif => notif.id !== id))}
+        />
     </div>
   );
 }
