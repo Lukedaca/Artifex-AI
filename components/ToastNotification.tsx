@@ -138,7 +138,7 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ notifications, onClose }) => {
   return (
-    <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3 pointer-events-none">
+    <div className="fixed top-5 right-5 z-50 w-full max-w-sm space-y-3 pointer-events-none">
       <div className="space-y-3 pointer-events-auto">
         {notifications.map((notification) => (
           <ToastNotification

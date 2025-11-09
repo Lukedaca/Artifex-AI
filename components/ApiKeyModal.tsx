@@ -16,12 +16,13 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onKeySelectionAttempt
 
   return (
     <div
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 pointer-events-auto"
+        className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[9999] flex items-center justify-center p-4"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        style={{ pointerEvents: 'auto' }}
     >
-      <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8 relative transform transition-all border border-slate-800/50 overflow-hidden animate-scale-in pointer-events-auto">
+      <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8 relative transform transition-all border border-slate-800/50 overflow-hidden animate-scale-in" style={{ pointerEvents: 'auto' }}>
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-cyan-500 to-fuchsia-500 aurora-glow"></div>
 
         <h2 id="modal-title" className="text-2xl font-bold text-slate-100 mt-4 mb-2">Vyžadován Google Gemini API Klíč</h2>
