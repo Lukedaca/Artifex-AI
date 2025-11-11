@@ -9,14 +9,12 @@ import GenerateImageView from './components/GenerateImageView';
 
 // Components
 import Sidebar from './components/Sidebar';
-import ApiKeyModal from './components/ApiKeyModal';
 import { ToastContainer } from './components/ToastNotification';
 
 // Types
 import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } from './types';
 
 // Utils & Services
-import { hasSelectedApiKey } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
 import { getPresets } from './services/userProfileService';
 
@@ -78,9 +76,6 @@ function App() {
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
 
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [apiKeyChecked, setApiKeyChecked] = useState(false);
-
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -89,19 +84,6 @@ function App() {
 
 
   // --- Effects ---
-
-  // API Key Check
-  useEffect(() => {
-    if (view === 'home' || apiKeyChecked) return;
-    const checkKey = async () => {
-        const hasKey = await hasSelectedApiKey();
-        if (!hasKey) {
-            setIsApiKeyModalOpen(true);
-        }
-        setApiKeyChecked(true); // only check once per session
-    };
-    checkKey();
-  }, [view, apiKeyChecked]);
 
   // Load presets
   useEffect(() => {
@@ -212,17 +194,6 @@ function App() {
     );
     setView('editor');
   }, [setFiles]);
-
-  const handleKeySelectionAttempt = useCallback(async () => {
-    setIsApiKeyModalOpen(false);
-    const hasKey = await hasSelectedApiKey();
-    if (!hasKey) {
-      setTimeout(() => {
-          addNotification('Pro plnou funkčnost je potřeba vybrat API klíč.', 'error');
-          setIsApiKeyModalOpen(true);
-      }, 500); // Re-open if they closed without selecting
-    }
-  }, [addNotification]);
   
   const getPageTitle = () => {
       if (view === 'upload') return 'Nahrát fotky';
@@ -235,7 +206,6 @@ function App() {
   const renderView = () => {
     const headerProps = {
         title: getPageTitle(),
-        onOpenApiKeyModal: () => setIsApiKeyModalOpen(true),
         onToggleSidebar: handleToggleSidebar,
     };
 
@@ -273,8 +243,6 @@ function App() {
         <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
             {renderView()}
         </main>
-        
-        <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
 
         <ToastContainer
           notifications={notifications}

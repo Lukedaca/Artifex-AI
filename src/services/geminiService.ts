@@ -1,77 +1,124 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+// Fully offline AI image processing service
+// All processing runs in the browser using TensorFlow.js
+
 import type { AnalysisResult } from '../types';
-import { fileToBase64 } from '../utils/imageProcessor';
-import { getApiKey } from '../utils/apiKey';
 import * as tfImageService from './tfImageService';
+import * as mobilenet from '@tensorflow-models/mobilenet';
 
-// Helper to create a new GenAI instance for each request
-const getGenAI = async () => {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('API klíč není nastaven. Prosím, zadejte API klíč v nastavení.');
-  }
-  return new GoogleGenerativeAI(apiKey);
-};
-
-// Safety settings for all requests
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-];
+let mobileNetModel: mobilenet.MobileNet | null = null;
 
 /**
- * Analyzes an image to provide a description, technical info, and improvement suggestions.
- * Uses Google Gemini AI for intelligent image analysis.
+ * Load MobileNet model for image classification
  */
-export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
-  const genAI = await getGenAI();
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-pro',
-    safetySettings,
-  });
-
-  const base64Image = await fileToBase64(file);
-  const imageParts = [{
-    inlineData: {
-      data: base64Image,
-      mimeType: file.type,
-    },
-  }];
-
-  const prompt = `Analyze this photograph and provide a JSON response with the following structure:
-{
-  "description": "Detailed description of the image",
-  "suggestions": ["suggestion1", "suggestion2", "suggestion3"],
-  "technicalInfo": {
-    "ISO": "estimated ISO value",
-    "Aperture": "estimated aperture (f-stop)",
-    "ShutterSpeed": "estimated shutter speed"
-  },
-  "proactiveSuggestions": [
-    {"text": "suggestion text", "action": "action-name"},
-    {"text": "suggestion text", "action": "action-name"}
-  ]
+async function loadMobileNetModel(): Promise<mobilenet.MobileNet> {
+  if (!mobileNetModel) {
+    console.log('Loading MobileNet model for image analysis...');
+    mobileNetModel = await mobilenet.load({
+      version: 2,
+      alpha: 1.0,
+    });
+    console.log('MobileNet model loaded!');
+  }
+  return mobileNetModel;
 }
 
-Provide 3-5 specific improvements suggestions and 2 proactive edit suggestions like "remove-background" or "auto-crop" based on the image content. Return ONLY the JSON, no additional text.`;
+/**
+ * Analyzes an image using TensorFlow.js MobileNet model
+ * Provides object detection and intelligent suggestions - fully offline!
+ */
+export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
+  const model = await loadMobileNetModel();
 
-  const result = await model.generateContent([prompt, ...imageParts]);
-  const response = result.response;
-  const text = response.text();
+  // Load image
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await new Promise((resolve) => { img.onload = resolve; });
 
-  // Clean up response to get only JSON
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('Failed to parse AI response');
+  // Classify image
+  const predictions = await model.classify(img);
+  URL.revokeObjectURL(img.src);
+
+  // Build description from top predictions
+  const topPredictions = predictions.slice(0, 3);
+  const detectedObjects = topPredictions.map(p => p.className.toLowerCase()).join(', ');
+
+  const description = `Fotografie obsahuje: ${detectedObjects}. ` +
+    `Hlavní objekt: ${predictions[0].className} (${(predictions[0].probability * 100).toFixed(1)}% jistota).`;
+
+  // Analyze image properties
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not get canvas context');
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  // Calculate average brightness
+  let totalBrightness = 0;
+  let totalSaturation = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    totalBrightness += brightness;
+
+    const max = Math.max(data[i], data[i + 1], data[i + 2]);
+    const min = Math.min(data[i], data[i + 1], data[i + 2]);
+    const saturation = max === 0 ? 0 : ((max - min) / max) * 100;
+    totalSaturation += saturation;
+  }
+  const avgBrightness = totalBrightness / (data.length / 4);
+  const avgSaturation = totalSaturation / (data.length / 4);
+
+  // Generate intelligent suggestions based on analysis
+  const suggestions: string[] = [];
+
+  if (avgBrightness < 100) {
+    suggestions.push('Zvýšit jas - fotografie je poměrně tmavá');
+  } else if (avgBrightness > 180) {
+    suggestions.push('Snížit expozici - fotografie je přeexponovaná');
   }
 
-  return JSON.parse(jsonMatch[0]) as AnalysisResult;
+  if (avgSaturation < 20) {
+    suggestions.push('Zvýšit saturaci barev pro živější vzhled');
+  } else if (avgSaturation > 70) {
+    suggestions.push('Mírně snížit saturaci pro přirozenější barvy');
+  }
+
+  suggestions.push('Použít AI Autopilot pro automatické vylepšení');
+  suggestions.push('Experimentovat s odstraněním pozadí pro čistší kompozici');
+
+  // Add suggestions based on detected content
+  if (detectedObjects.includes('person') || detectedObjects.includes('face')) {
+    suggestions.push('Zkuste odstranit pozadí pro profesionální portrét');
+  }
+
+  // Estimate technical info (simplified without EXIF)
+  const technicalInfo = {
+    ISO: avgBrightness < 128 ? 'Odhad: 800-1600' : 'Odhad: 100-400',
+    Aperture: 'Odhad: f/2.8-f/5.6',
+    ShutterSpeed: avgBrightness < 128 ? 'Odhad: 1/60s' : 'Odhad: 1/250s'
+  };
+
+  // Proactive suggestions
+  const proactiveSuggestions = [
+    {
+      text: 'Automatické vylepšení osvětlení a barev',
+      action: 'autopilot'
+    },
+    {
+      text: 'Odstranit pozadí pro čistší vzhled',
+      action: 'remove-background'
+    }
+  ];
+
+  return {
+    description,
+    suggestions,
+    technicalInfo,
+    proactiveSuggestions
+  };
 };
 
 /**
@@ -88,7 +135,6 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
  */
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
   // For now, we use background removal as a proxy for object removal
-  // In future, could implement more sophisticated inpainting
   if (objectToRemove && objectToRemove.toLowerCase().includes('background')) {
     return tfImageService.removeBackground(file);
   }
@@ -132,8 +178,8 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
 
 /**
  * Generates a new image from a text prompt.
- * Note: This feature is not available in standalone mode.
+ * Note: This feature is not available in offline mode.
  */
 export const generateImage = async (prompt: string): Promise<string> => {
-  throw new Error('Generování obrázků není dostupné v offline režimu. Tato funkce vyžaduje externí API.');
+  throw new Error('Generování obrázků není dostupné v offline režimu. Použijte AI Autopilot pro vylepšení existujících fotek.');
 };
