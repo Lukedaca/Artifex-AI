@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import type { AnalysisResult } from '../types';
-import { fileToBase64, base64ToFile } from '../utils/imageProcessor';
+import { fileToBase64 } from '../utils/imageProcessor';
 import { getApiKey } from '../utils/apiKey';
+import * as tfImageService from './tfImageService';
 
 // Helper to create a new GenAI instance for each request
 const getGenAI = async () => {
@@ -26,6 +27,7 @@ const safetySettings = [
 
 /**
  * Analyzes an image to provide a description, technical info, and improvement suggestions.
+ * Uses Google Gemini AI for intelligent image analysis.
  */
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
   const genAI = await getGenAI();
@@ -57,7 +59,7 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
   ]
 }
 
-Provide 3-5 specific improvements suggestions and 2 proactive edit suggestions like "remove-object" or "auto-crop" based on the image content. Return ONLY the JSON, no additional text.`;
+Provide 3-5 specific improvements suggestions and 2 proactive edit suggestions like "remove-background" or "auto-crop" based on the image content. Return ONLY the JSON, no additional text.`;
 
   const result = await model.generateContent([prompt, ...imageParts]);
   const response = result.response;
@@ -74,54 +76,64 @@ Provide 3-5 specific improvements suggestions and 2 proactive edit suggestions l
 
 /**
  * Applies automatic "autopilot" enhancements to an image.
- * Note: Image generation is limited in the free API, this is a text-based description
+ * Uses TensorFlow.js running in the browser for offline processing.
  */
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
-  // For now, return original file with a note about limitations
-  // Full image editing requires Gemini Flash Image model which may have restrictions
-  console.warn('Image editing with AI is limited in standalone mode. Returning original image.');
-  return { file };
+  return tfImageService.autopilotImage(file);
 };
 
 /**
- * Removes a user-specified object from an image.
- * Note: Image editing requires specific models not available in all tiers
+ * Removes background from an image using TensorFlow.js BodyPix model.
+ * This function removes the background and makes it transparent.
  */
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
-  if (!objectToRemove) throw new Error("Please specify what to remove.");
-  console.warn('Image editing with AI is limited in standalone mode. Returning original image.');
-  return { file };
+  // For now, we use background removal as a proxy for object removal
+  // In future, could implement more sophisticated inpainting
+  if (objectToRemove && objectToRemove.toLowerCase().includes('background')) {
+    return tfImageService.removeBackground(file);
+  }
+  // Fallback to background removal for other objects
+  return tfImageService.removeBackground(file);
 };
 
 /**
  * Automatically crops an image to improve composition.
+ * Uses TensorFlow.js to detect the main subject and crop accordingly.
  */
 export const autoCrop = async (file: File): Promise<{ file: File }> => {
-  console.warn('Image editing with AI is limited in standalone mode. Returning original image.');
-  return { file };
+  return tfImageService.autoCrop(file);
 };
 
 /**
- * Replaces the background of an image based on a text prompt.
+ * Replaces the background of an image.
+ * Uses TensorFlow.js for segmentation and background replacement.
  */
 export const replaceBackground = async (file: File, newBackgroundPrompt: string): Promise<{ file: File }> => {
   if (!newBackgroundPrompt) throw new Error("Please describe the new background.");
-  console.warn('Image editing with AI is limited in standalone mode. Returning original image.');
-  return { file };
+
+  // Parse color from prompt (simple implementation)
+  let backgroundColor = '#ffffff'; // default white
+  if (newBackgroundPrompt.toLowerCase().includes('black')) backgroundColor = '#000000';
+  else if (newBackgroundPrompt.toLowerCase().includes('red')) backgroundColor = '#ff0000';
+  else if (newBackgroundPrompt.toLowerCase().includes('blue')) backgroundColor = '#0000ff';
+  else if (newBackgroundPrompt.toLowerCase().includes('green')) backgroundColor = '#00ff00';
+  else if (newBackgroundPrompt.toLowerCase().includes('yellow')) backgroundColor = '#ffff00';
+
+  return tfImageService.replaceBackground(file, backgroundColor);
 };
 
 /**
  * Applies the style of one image to another.
+ * Uses TensorFlow.js for color-based style transfer.
  */
 export const styleTransfer = async (originalFile: File, styleFile: File): Promise<{ file: File }> => {
-  console.warn('Image editing with AI is limited in standalone mode. Returning original image.');
-  return { file: originalFile };
+  return tfImageService.styleTransfer(originalFile, styleFile);
 };
 
 /**
  * Generates a new image from a text prompt.
- * Note: Imagen model requires specific API access
+ * Note: This feature is not available in standalone mode.
  */
 export const generateImage = async (prompt: string): Promise<string> => {
-  throw new Error('Image generation is not available in standalone mode. This feature requires Google AI Studio or specific API tier.');
+  throw new Error('Generování obrázků není dostupné v offline režimu. Tato funkce vyžaduje externí API.');
 };
