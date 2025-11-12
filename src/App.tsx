@@ -9,6 +9,7 @@ import GenerateImageView from './components/GenerateImageView';
 
 // Components
 import Sidebar from './components/Sidebar';
+import ApiKeyModal from './components/ApiKeyModal';
 import { ToastContainer } from './components/ToastNotification';
 
 // Types
@@ -75,6 +76,8 @@ function App() {
 
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
+
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -194,7 +197,11 @@ function App() {
     );
     setView('editor');
   }, [setFiles]);
-  
+
+  const handleKeySelectionAttempt = useCallback(() => {
+    setIsApiKeyModalOpen(false);
+  }, []);
+
   const getPageTitle = () => {
       if (view === 'upload') return 'Nahrát fotky';
       if (view === 'editor') return 'Editor & AI Analýza';
@@ -206,6 +213,7 @@ function App() {
   const renderView = () => {
     const headerProps = {
         title: getPageTitle(),
+        onOpenApiKeyModal: () => setIsApiKeyModalOpen(true),
         onToggleSidebar: handleToggleSidebar,
     };
 
@@ -243,6 +251,8 @@ function App() {
         <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
             {renderView()}
         </main>
+
+        <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
 
         <ToastContainer
           notifications={notifications}
