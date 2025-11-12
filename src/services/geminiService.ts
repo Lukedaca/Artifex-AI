@@ -40,32 +40,32 @@ async function fileToGenerativePart(file: File): Promise<{ inlineData: { data: s
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
-    const prompt = `Analyzuj tuto fotografii a poskytni:
+    const prompt = `Analyze this photograph and provide a detailed analysis in Czech language.
 
-1. POPIS: Detailní popis toho, co je na fotografii (hlavní objekty, scéna, atmosféra, barvy, kompozice)
+You must respond in EXACTLY this format:
 
-2. NÁVRHY: Tři konkrétní, actionable tipy na vylepšení fotografie (osvětlení, barvy, kompozice, ořez atd.)
-
-3. TECHNICKÉ INFO: Odhadni technické parametry (ISO, clona, rychlost závěrky) na základě kvality a vlastností fotografie
-
-Formát odpovědi:
-POPIS: [tvůj popis]
+POPIS: [detailed description of what is in the photo - main objects, scene, atmosphere, colors, composition]
 NÁVRHY:
-- [tip 1]
-- [tip 2]
-- [tip 3]
+- [specific actionable tip 1 for improvement - lighting, colors, composition, crop, etc.]
+- [specific actionable tip 2 for improvement]
+- [specific actionable tip 3 for improvement]
 TECHNICKÉ:
-- ISO: [odhad]
-- Clona: [odhad]
-- Závěrka: [odhad]`;
+- ISO: [estimate]
+- Clona: [estimate]
+- Závěrka: [estimate]
+
+Important: Use Czech language for all content. Be specific and actionable in suggestions.`;
 
     const result = await model.generateContent([prompt, imagePart]);
     const response = result.response;
     const text = response.text();
+
+    // Debug logging
+    console.log('🤖 Gemini AI Analysis Response:', text);
 
     // Parse response
     const descMatch = text.match(/POPIS:([\s\S]*?)(?=NÁVRHY:|$)/i);
@@ -128,31 +128,51 @@ TECHNICKÉ:
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
-    const prompt = `Analyzuj tuto fotografii a navrhni konkrétní numerické hodnoty pro vylepšení:
+    const prompt = `You are an image enhancement AI. Analyze this photograph and suggest specific numerical adjustment values.
 
-Odpověz POUZE v tomto formátu (žádný další text):
-BRIGHTNESS: [číslo -100 až 100]
-CONTRAST: [číslo -100 až 100]
-SATURATION: [číslo -100 až 100]
-WARMTH: [číslo -100 až 100]
+Output format (STRICT - no additional text):
+BRIGHTNESS: <number>
+CONTRAST: <number>
+SATURATION: <number>
+WARMTH: <number>
 
-Kde:
-- Negativní čísla = snížení
-- Pozitivní čísla = zvýšení
-- 0 = beze změny`;
+Rules:
+- Numbers must be between -100 and 100
+- Negative = decrease, Positive = increase, 0 = no change
+- Be reasonable with adjustments (typically -50 to +50 range)
+
+Example output:
+BRIGHTNESS: 15
+CONTRAST: 10
+SATURATION: 8
+WARMTH: -5
+
+Analyze the image and provide adjustments:`;
 
     const result = await model.generateContent([prompt, imagePart]);
     const text = result.response.text();
 
-    // Parse adjustment values
+    // Debug logging
+    console.log('🤖 Gemini Autopilot Response:', text);
+
+    // Parse adjustment values with fallback
     const brightness = parseFloat(text.match(/BRIGHTNESS:\s*([-\d.]+)/i)?.[1] || '0');
     const contrast = parseFloat(text.match(/CONTRAST:\s*([-\d.]+)/i)?.[1] || '0');
     const saturation = parseFloat(text.match(/SATURATION:\s*([-\d.]+)/i)?.[1] || '0');
     const warmth = parseFloat(text.match(/WARMTH:\s*([-\d.]+)/i)?.[1] || '0');
+
+    // Debug parsed values
+    console.log('📊 Parsed adjustment values:', { brightness, contrast, saturation, warmth });
+
+    // Validate that we got at least some non-zero values
+    if (brightness === 0 && contrast === 0 && saturation === 0 && warmth === 0) {
+      console.warn('⚠️ All adjustment values are 0 - Gemini response format might be incorrect');
+      throw new Error('Gemini AI nevrátil platné hodnoty úprav. Odpověď AI byla v neočekávaném formátu. Zkuste to prosím znovu.');
+    }
 
     // Apply adjustments using Canvas API
     const img = new Image();
@@ -224,30 +244,40 @@ Kde:
 export const autoCrop = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
-    const prompt = `Analyzuj kompozici této fotografie a navrhni optimální ořez.
+    const prompt = `You are an image composition AI. Analyze this photograph and suggest optimal crop for better composition using rule of thirds and subject positioning.
 
-Odpověz POUZE v tomto formátu:
-CROP: [left%] [top%] [width%] [height%]
+Output format (STRICT - no additional text):
+CROP: <left> <top> <width> <height>
 
-Kde:
-- left% = levý okraj v procentech (0-100)
-- top% = horní okraj v procentech (0-100)
-- width% = šířka v procentech (1-100)
-- height% = výška v procentech (1-100)
+Where:
+- left = left edge in percentage (0-100)
+- top = top edge in percentage (0-100)
+- width = width in percentage (1-100)
+- height = height in percentage (1-100)
 
-Příklad: CROP: 10 5 80 90 znamená ořez začínající 10% zleva, 5% shora, šířka 80%, výška 90%`;
+Example output:
+CROP: 10 5 80 90
+
+This means: crop starting at 10% from left, 5% from top, with 80% width and 90% height.
+
+Analyze the image and provide optimal crop values:`;
 
     const result = await model.generateContent([prompt, imagePart]);
     const text = result.response.text();
+
+    // Debug logging
+    console.log('🤖 Gemini Auto Crop Response:', text);
 
     // Parse crop values
     const match = text.match(/CROP:\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
 
     let left = 10, top = 10, width = 80, height = 80; // defaults
+
+    console.log('📊 Crop match result:', match);
     if (match) {
       left = Math.max(0, Math.min(100, parseFloat(match[1])));
       top = Math.max(0, Math.min(100, parseFloat(match[2])));
@@ -298,7 +328,7 @@ Příklad: CROP: 10 5 80 90 znamená ořez začínající 10% zleva, 5% shora, �
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -335,7 +365,7 @@ export const replaceBackground = async (file: File, newBackgroundPrompt: string)
 
     // Simple color-based background replacement
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
