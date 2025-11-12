@@ -40,7 +40,7 @@ async function fileToGenerativePart(file: File): Promise<{ inlineData: { data: s
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -128,7 +128,7 @@ Important: Use Czech language for all content. Be specific and actionable in sug
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -244,7 +244,7 @@ Analyze the image and provide adjustments:`;
 export const autoCrop = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -328,7 +328,7 @@ Analyze the image and provide optimal crop values:`;
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -365,7 +365,7 @@ export const replaceBackground = async (file: File, newBackgroundPrompt: string)
 
     // Simple color-based background replacement
     const genAI = await getGenAI();
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const imagePart = await fileToGenerativePart(file);
 
