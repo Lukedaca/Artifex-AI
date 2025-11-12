@@ -599,18 +599,26 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                           draggable="false"
                       />
                       
-                      {/* After Image (top layer, clipped) */}
-                      <div 
+                      {/* After Image (top layer, clipped) - Shows current state (AI edits + manual edits) */}
+                      <div
                           className="absolute top-0 left-0 w-full h-full overflow-hidden rounded-lg"
                           style={{ clipPath: `inset(0 ${100 - compareSliderPosition}% 0 0)` }}
                       >
                           <img
                               key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
                               src={editedPreviewUrl || activeFile.previewUrl}
-                              alt="Edited"
+                              alt="Upravený"
                               className="block max-w-full max-h-full object-contain absolute top-0 left-0 w-full h-full"
                               draggable="false"
                           />
+                      </div>
+
+                      {/* Label indicators */}
+                      <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm px-3 py-1 rounded-lg text-white text-xs font-semibold border border-slate-700/50">
+                        Originál
+                      </div>
+                      <div className="absolute top-4 right-4 bg-cyan-500/80 backdrop-blur-sm px-3 py-1 rounded-lg text-white text-xs font-semibold border border-cyan-400/50">
+                        Upravený
                       </div>
 
                       {/* Slider Divider and Handle */}
