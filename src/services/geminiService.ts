@@ -32,9 +32,64 @@ export const listAvailableModels = async () => {
 };
 
 /**
+ * Resize image to reduce API payload size and improve speed
+ * For analysis tasks, we don't need full resolution
+ */
+async function resizeImageForAnalysis(file: File, maxDimension = 1024): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // Check if resize is needed
+      if (img.width <= maxDimension && img.height <= maxDimension) {
+        resolve(file); // No resize needed
+        return;
+      }
+
+      // Calculate new dimensions
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        }
+      } else {
+        if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      // Create canvas and resize
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create blob'));
+          return;
+        }
+        resolve(new File([blob], file.name, { type: file.type }));
+      }, file.type, 0.92);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/**
  * Convert File to base64 for Gemini API
  */
-async function fileToGenerativePart(file: File): Promise<{ inlineData: { data: string; mimeType: string } }> {
+async function fileToGenerativePart(file: File, resize = false): Promise<{ inlineData: { data: string; mimeType: string } }> {
+  const fileToUse = resize ? await resizeImageForAnalysis(file) : file;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -42,12 +97,12 @@ async function fileToGenerativePart(file: File): Promise<{ inlineData: { data: s
       resolve({
         inlineData: {
           data: base64,
-          mimeType: file.type,
+          mimeType: fileToUse.type,
         },
       });
     };
     reader.onerror = reject;
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileToUse);
   });
 }
 
@@ -61,7 +116,8 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
     // Use gemini-2.5-flash for image understanding (official Google recommendation)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const imagePart = await fileToGenerativePart(file);
+    // Use resized image for faster analysis
+    const imagePart = await fileToGenerativePart(file, true);
 
     const prompt = `Analyze this photograph and provide a detailed analysis in Czech language.
 
@@ -150,7 +206,8 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
     // Use gemini-2.5-flash for image understanding (official Google recommendation)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const imagePart = await fileToGenerativePart(file);
+    // Use resized image for faster analysis (marketing promise: "seconds")
+    const imagePart = await fileToGenerativePart(file, true);
 
     const prompt = `You are an image enhancement AI. Analyze this photograph and suggest specific numerical adjustment values.
 
@@ -267,7 +324,8 @@ export const autoCrop = async (file: File): Promise<{ file: File }> => {
     // Use gemini-2.5-flash for image understanding (official Google recommendation)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const imagePart = await fileToGenerativePart(file);
+    // Use resized image for faster analysis (marketing promise: "seconds")
+    const imagePart = await fileToGenerativePart(file, true);
 
     const prompt = `You are an image composition AI. Analyze this photograph and suggest optimal crop for better composition using rule of thirds and subject positioning.
 
