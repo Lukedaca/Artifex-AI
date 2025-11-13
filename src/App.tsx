@@ -142,12 +142,14 @@ function App() {
     const promises = selectedFiles.map(async file => {
       try {
         const normalizedFile = await normalizeImageFile(file);
+        // Create TWO separate blob URLs to prevent revokeObjectURL from breaking compare mode
         const previewUrl = URL.createObjectURL(normalizedFile);
+        const originalPreviewUrl = URL.createObjectURL(normalizedFile);
         validFiles.push({
           id: `${Date.now()}-${Math.random()}`,
           file: normalizedFile,
           previewUrl: previewUrl,
-          originalPreviewUrl: previewUrl,
+          originalPreviewUrl: originalPreviewUrl,
         });
       } catch (error) {
         addNotification(`Soubor ${file.name} není podporován.`, 'error');
@@ -166,12 +168,14 @@ function App() {
   }, [addNotification, setFiles]);
 
   const handleImageGenerated = useCallback((file: File) => {
+    // Create TWO separate blob URLs to prevent revokeObjectURL from breaking compare mode
     const previewUrl = URL.createObjectURL(file);
+    const originalPreviewUrl = URL.createObjectURL(file);
     const newFile: UploadedFile = {
       id: `${Date.now()}-${Math.random()}`,
       file: file,
       previewUrl: previewUrl,
-      originalPreviewUrl: previewUrl,
+      originalPreviewUrl: originalPreviewUrl,
     };
     setFiles(currentFiles => [...currentFiles, newFile], 'Generován obrázek');
     setView('editor');
@@ -184,7 +188,7 @@ function App() {
       currentFiles => currentFiles.map(cf => {
         if (updatedFilesMap.has(cf.id)) {
           const newFile = updatedFilesMap.get(cf.id)!;
-          // Clean up old object URL
+          // Clean up old preview URL (but NOT originalPreviewUrl for compare mode)
           URL.revokeObjectURL(cf.previewUrl);
           // FIX: The 'newFile' variable is an object {id: string, file: File}.
           // URL.createObjectURL expects a File/Blob, not the wrapper object.
