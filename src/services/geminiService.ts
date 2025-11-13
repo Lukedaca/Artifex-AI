@@ -58,8 +58,8 @@ async function fileToGenerativePart(file: File): Promise<{ inlineData: { data: s
 export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
   try {
     const genAI = await getGenAI();
-    // Use gemini-pro-vision for ANALYZING image content
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    // Use gemini-2.5-flash for image understanding (official Google recommendation)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -147,8 +147,8 @@ Important: Use Czech language for all content. Be specific and actionable in sug
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    // Use gemini-pro-vision for ANALYZING what adjustments are needed
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    // Use gemini-2.5-flash for image understanding (official Google recommendation)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
@@ -264,8 +264,8 @@ Analyze the image and provide adjustments:`;
 export const autoCrop = async (file: File): Promise<{ file: File }> => {
   try {
     const genAI = await getGenAI();
-    // Use gemini-pro-vision for ANALYZING composition
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    // Use gemini-2.5-flash for image understanding (official Google recommendation)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const imagePart = await fileToGenerativePart(file);
 
