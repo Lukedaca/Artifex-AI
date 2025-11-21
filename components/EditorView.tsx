@@ -101,7 +101,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   // Shared export options state
   const [exportOptions, setExportOptions] = useState({
         format: 'jpeg',
-        quality: 90,
+        quality: 100,
         scale: 1,
     });
   // State for comparison slider
@@ -620,7 +620,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             <div className="p-4 space-y-4 text-center animate-fade-in-right">
                 <AutopilotIcon className="w-16 h-16 mx-auto text-cyan-400"/>
                 <h3 className="text-lg font-bold text-slate-100">Autopilot AI</h3>
-                <p className="text-sm text-slate-400">Nechte AI automaticky vylepšit váš obrázek jedním kliknutím.</p>
+                <p className="text-sm text-slate-400">Nechte AI automaticky vylepšit váš obrázek jedním kliknutím. Zachová původní strukturu a zaměří se na barvy a světlo.</p>
                 <button onClick={handleAutopilot} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
                     {isLoading ? 'Pracuji...' : 'Spustit Autopilot'}
                 </button>

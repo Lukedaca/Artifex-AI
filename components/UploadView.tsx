@@ -1,6 +1,8 @@
+
 import React, { useState, useCallback, useRef } from 'react';
-import { UploadIcon } from './icons';
+import { UploadIcon, ArrowPathIcon } from './icons';
 import Header from './Header';
+import { isRawFile, processRawFile, RAW_EXTENSIONS_STRING } from '../utils/rawProcessor';
 
 interface UploadViewProps {
   onFilesSelected: (files: File[]) => void;
@@ -8,15 +10,19 @@ interface UploadViewProps {
   title: string;
   onOpenApiKeyModal: () => void;
   onToggleSidebar: () => void;
+  addNotification?: (message: string, type: 'info' | 'error') => void;
 }
 
 const UploadView: React.FC<UploadViewProps> = ({ 
   onFilesSelected, 
   title, 
   onOpenApiKeyModal,
-  onToggleSidebar
+  onToggleSidebar,
+  addNotification
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -36,25 +42,51 @@ const UploadView: React.FC<UploadViewProps> = ({
     e.stopPropagation();
   }, []);
 
+  const processFiles = async (incomingFiles: File[]) => {
+      setIsProcessing(true);
+      const finalFiles: File[] = [];
+      let rawCount = 0;
+
+      for (let i = 0; i < incomingFiles.length; i++) {
+          const file = incomingFiles[i];
+          if (isRawFile(file)) {
+              rawCount++;
+              setProcessingStatus(`Konvertuji RAW: ${file.name} (${rawCount}...)`);
+              try {
+                  const convertedFile = await processRawFile(file);
+                  finalFiles.push(convertedFile);
+              } catch (error) {
+                  console.error(`Failed to convert ${file.name}`, error);
+                  if (addNotification) addNotification(`Nepodařilo se převést ${file.name}`, 'error');
+              }
+          } else {
+              finalFiles.push(file);
+          }
+      }
+
+      setIsProcessing(false);
+      setProcessingStatus('');
+      
+      if (finalFiles.length > 0) {
+          onFilesSelected(finalFiles);
+      }
+  };
+
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        onFilesSelected(files);
-      }
+      const files: File[] = Array.from(e.dataTransfer.files);
+      processFiles(files);
       e.dataTransfer.clearData();
     }
-  }, [onFilesSelected]);
+  }, [onFilesSelected, addNotification]);
   
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      if (files.length > 0) {
-        onFilesSelected(files);
-      }
+      const files: File[] = Array.from(e.target.files);
+      processFiles(files);
     }
   };
   
@@ -70,72 +102,83 @@ const UploadView: React.FC<UploadViewProps> = ({
         onToggleSidebar={onToggleSidebar}
       />
       <div className="flex-1 w-full flex items-center justify-center p-4 sm:p-8">
-        <div 
-          className={`w-full max-w-4xl flex flex-col items-center justify-center p-12 rounded-3xl transition-all duration-300 ease-in-out relative group`}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <div className={`absolute inset-0 rounded-3xl transition-all duration-300 ${isDragging ? 'aurora-glow-strong animate-pulse' : 'opacity-0'}`}></div>
-          <div 
-            className="absolute inset-0 rounded-3xl"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%2338bdf8' stroke-width='3' stroke-dasharray='10%2c 10' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`
-            }}
-          >
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" className="rounded-3xl">
-              <rect width="100%" height="100%" fill="none" rx="24" ry="24" 
-                stroke="url(#aurora-gradient)" 
-                strokeWidth="3" 
-                strokeDasharray="10, 10" 
-                strokeDashoffset="0" 
-                strokeLinecap="butt"
-                className={isDragging ? "marching-ants" : ""}
-              />
-              <defs>
-                <linearGradient id="aurora-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#22d3ee" />
-                  <stop offset="100%" stopColor="#d946ef" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          
-          <div className="text-center z-10">
-              <UploadIcon 
-                className="mx-auto h-20 w-20 text-slate-500 mb-6 transition-all duration-500 ease-out" 
-                style={{ transform: isDragging ? 'scale(1.15) translateY(-12px)' : 'scale(1)', filter: isDragging ? `drop-shadow(0 0 15px #22d3ee)` : 'none' }}
-              />
-              <h3 className="mt-4 text-3xl font-bold tracking-tight text-slate-100">
-                Přetáhněte fotografie sem
-              </h3>
-              <p className="mt-2 text-lg text-slate-400">
-                nebo klikněte pro výběr souborů z vašeho počítače
-              </p>
-              <div className="mt-12">
-                  <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                  />
-                  <button
-                      type="button"
-                      onClick={onButtonClick}
-                      className="inline-flex items-center px-10 py-4 border border-transparent text-base font-semibold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-fuchsia-500 transition-all transform hover:-translate-y-1 active:translate-y-0 hover:shadow-2xl hover:shadow-cyan-500/30 aurora-glow"
-                  >
-                      <UploadIcon className="-ml-1 mr-3 h-6 w-6" />
-                      Vybrat soubory
-                  </button>
-              </div>
-              <p className="mt-10 text-xs text-slate-500">
-                Podporujeme formáty JPG, PNG a WEBP.
-              </p>
-          </div>
-        </div>
+        {isProcessing ? (
+            <div className="flex flex-col items-center justify-center text-slate-400 animate-fade-in">
+                 <div className="w-16 h-16 mb-6 relative">
+                    <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-t-cyan-500 border-r-fuchsia-500 border-b-transparent border-l-transparent animate-spin"></div>
+                 </div>
+                 <h3 className="text-2xl font-bold text-slate-200 mb-2">Zpracovávám soubory...</h3>
+                 <p>{processingStatus}</p>
+            </div>
+        ) : (
+            <div 
+            className={`w-full max-w-4xl flex flex-col items-center justify-center p-12 rounded-3xl transition-all duration-300 ease-in-out relative group`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            >
+            <div className={`absolute inset-0 rounded-3xl transition-all duration-300 ${isDragging ? 'aurora-glow-strong animate-pulse' : 'opacity-0'}`}></div>
+            <div 
+                className="absolute inset-0 rounded-3xl"
+                style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%2338bdf8' stroke-width='3' stroke-dasharray='10%2c 10' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`
+                }}
+            >
+                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" className="rounded-3xl">
+                <rect width="100%" height="100%" fill="none" rx="24" ry="24" 
+                    stroke="url(#aurora-gradient)" 
+                    strokeWidth="3" 
+                    strokeDasharray="10, 10" 
+                    strokeDashoffset="0" 
+                    strokeLinecap="butt"
+                    className={isDragging ? "marching-ants" : ""}
+                />
+                <defs>
+                    <linearGradient id="aurora-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#22d3ee" />
+                    <stop offset="100%" stopColor="#d946ef" />
+                    </linearGradient>
+                </defs>
+                </svg>
+            </div>
+            
+            <div className="text-center z-10">
+                <UploadIcon 
+                    className="mx-auto h-20 w-20 text-slate-500 mb-6 transition-all duration-500 ease-out" 
+                    style={{ transform: isDragging ? 'scale(1.15) translateY(-12px)' : 'scale(1)', filter: isDragging ? `drop-shadow(0 0 15px #22d3ee)` : 'none' }}
+                />
+                <h3 className="mt-4 text-3xl font-bold tracking-tight text-slate-100">
+                    Přetáhněte fotografie sem
+                </h3>
+                <p className="mt-2 text-lg text-slate-400">
+                    Podpora JPG, PNG, WEBP a <strong>RAW (CR2, NEF, ARW...)</strong>
+                </p>
+                <div className="mt-12">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept={`image/jpeg,image/png,image/webp,${RAW_EXTENSIONS_STRING}`}
+                        onChange={handleFileSelect}
+                        className="hidden"
+                    />
+                    <button
+                        type="button"
+                        onClick={onButtonClick}
+                        className="inline-flex items-center px-10 py-4 border border-transparent text-base font-semibold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-fuchsia-500 transition-all transform hover:-translate-y-1 active:translate-y-0 hover:shadow-2xl hover:shadow-cyan-500/30 aurora-glow"
+                    >
+                        <UploadIcon className="-ml-1 mr-3 h-6 w-6" />
+                        Vybrat soubory
+                    </button>
+                </div>
+                <p className="mt-10 text-xs text-slate-500">
+                    RAW soubory budou automaticky vyvolány a převedeny.
+                </p>
+            </div>
+            </div>
+        )}
       </div>
     </div>
   );

@@ -68,6 +68,7 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
 };
 
 // Generic function for image-in, image-out editing tasks
+// Switched default back to gemini-2.5-flash-image for stability in edits
 const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2.5-flash-image'): Promise<{ file: File }> => {
     const ai = getGenAI();
     const base64Image = await fileToBase64(file);
@@ -79,9 +80,6 @@ const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2
                 { inlineData: { data: base64Image, mimeType: file.type } },
                 { text: prompt },
             ],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE],
         },
     });
 
@@ -102,18 +100,24 @@ const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2
  */
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   const prompt = `
-      Act as a world-class professional photo retoucher. Your task is to significantly enhance this image to professional standards while maintaining a natural look. 
-      
-      Please perform the following adjustments:
-      1. **Global Lighting:** Optimize exposure, balance high-dynamic-range (HDR) by lifting crushed shadows and recovering blown-out highlights.
-      2. **Color Correction:** Fix any color casts (white balance), ensuring neutral grays and natural skin tones.
-      3. **Detail & Texture:** Intelligently sharpen fine details and textures while reducing digital noise.
-      4. **Depth & Contrast:** Enhance global contrast and micro-contrast (clarity) to add depth.
-      5. **Vibrance:** Subtly boost color vibrance to make the image pop, but avoid oversaturation.
-      
-      The final result should look like a high-end, edited photograph suitable for a portfolio.
+      Role: Professional Photo Retoucher.
+      Task: Enhance this image's lighting, color, and clarity.
+
+      **CRITICAL RULES (VIOLATION = FAILURE):**
+      1.  **PRESERVE FACIAL INTEGRITY:** Do NOT change facial features, eyes, nose, or mouth shape. Do NOT warp the face.
+      2.  **NO HALLUCINATIONS:** Do NOT add or remove objects.
+      3.  **NATURAL LOOK:** Do not make it look like a cartoon. Keep skin texture.
+
+      **Adjustments to Apply:**
+      1.  **Lighting:** Balance exposure. Gently lift shadows and recover highlights.
+      2.  **Color:** Correct white balance. Improve skin tones to be natural and healthy.
+      3.  **Contrast:** Add depth (micro-contrast) without crushing blacks.
+      4.  **Clarity:** Sharpen details slightly.
+
+      Output: The exact same photo, but better developed.
   `;
-  return editImageWithPrompt(file, prompt);
+  // Use 2.5-flash-image for editing to avoid 3-pro's tendency to hallucinate faces
+  return editImageWithPrompt(file, prompt, 'gemini-2.5-flash-image');
 };
 
 /**
@@ -121,7 +125,7 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
  */
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
     if (!objectToRemove) throw new Error("Please specify what to remove.");
-    return editImageWithPrompt(file, `Remove the following object from the image: ${objectToRemove}. Fill in the background seamlessly and naturally.`);
+    return editImageWithPrompt(file, `Remove the following object from the image: ${objectToRemove}. Fill in the background seamlessly and naturally matching the surrounding texture, lighting, and noise profile.`);
 };
 
 /**
@@ -144,10 +148,10 @@ export const autoCrop = async (file: File, aspectRatio: string = 'Original', ins
         ${customInstruction}
 
         **EXECUTION GUIDELINES:**
-        1. **Remove Distractions:** Aggressively crop out empty space (grass, sky, background) that does not contribute to the story or the user's instruction.
-        2. **Sports/Action:** If this is a sports photo and no other instruction is given, ZOOM IN TIGHT on the players and the ball. The action should fill the frame. We want to see the intensity.
-        3. **Portraits:** Ensure professional headroom and eye placement (Rule of Thirds).
-        4. **No Distortion:** Do not stretch the image. Cut the pixels to fit the ratio.
+        1. **Zoom on Action (Sports/Active):** If this is a sports or action shot, ZOOM IN AGGRESSIVELY. Remove dead space around the players. We want to see the emotion and the immediate action.
+        2. **Remove Distractions:** Cut out empty sky, grass, or irrelevant background elements that do not add to the story.
+        3. **Fill the Frame:** Do not leave black bars. The image content must fill the requested aspect ratio.
+        4. **No Distortion:** Do not stretch the image. Resample/Crop pixels to fit.
         
         Return the cropped image.
     `;
@@ -159,7 +163,7 @@ export const autoCrop = async (file: File, aspectRatio: string = 'Original', ins
  */
 export const replaceBackground = async (file: File, newBackgroundPrompt: string): Promise<{ file: File }> => {
     if (!newBackgroundPrompt) throw new Error("Please describe the new background.");
-    return editImageWithPrompt(file, `Replace the background of this image with the following scene: ${newBackgroundPrompt}. Ensure the foreground subject is integrated naturally with correct lighting and shadows.`);
+    return editImageWithPrompt(file, `Replace the background of this image with the following scene: ${newBackgroundPrompt}. Ensure the foreground subject is integrated naturally with correct lighting match, shadow casting, and color grading.`);
 };
 
 /**
@@ -173,16 +177,13 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
     ]);
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.5-flash-image', // Switched to Flash for safer structure preservation
         contents: {
             parts: [
                 { inlineData: { data: originalBase64, mimeType: originalFile.type } },
                 { inlineData: { data: styleBase64, mimeType: styleFile.type } },
-                { text: "Apply the artistic style of the second image to the content of the first image. Maintain the structural integrity of the primary subject." },
+                { text: "Apply the artistic style, color palette, and lighting of the second image to the content of the first image. Maintain the structural integrity of the primary subject in the first image." },
             ],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE],
         },
     });
 
@@ -198,23 +199,40 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
 };
 
 /**
- * Generates a new image from a text prompt using Imagen.
+ * Generates a new image from a text prompt using Gemini Pro Image Preview.
+ * THIS REMAINS GEMINI-3-PRO-IMAGE-PREVIEW as requested.
  */
 export const generateImage = async (prompt: string): Promise<string> => {
   const ai = getGenAI();
-  const response = await ai.models.generateImages({
-    model: 'imagen-4.0-generate-001',
-    prompt,
+  
+  // Enhanced prompt to ensure the model interprets it as a generation task and not a text completion task
+  const enhancedPrompt = `Generate a high-quality, photorealistic image matching this description: ${prompt}`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-image-preview',
+    contents: {
+        parts: [
+            { text: enhancedPrompt }
+        ]
+    },
     config: {
-      numberOfImages: 1,
-      outputMimeType: 'image/jpeg',
-      aspectRatio: '1:1',
+      imageConfig: {
+          aspectRatio: '1:1',
+          imageSize: '1K', // Standard 1K resolution
+      }
     },
   });
 
-  if (!response.generatedImages || response.generatedImages.length === 0) {
-    throw new Error('Image generation failed, no images were returned.');
+  const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+  
+  if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
+    // Check if the model refused and returned text
+    const textPart = response.candidates?.[0]?.content?.parts?.find(part => part.text);
+    if (textPart?.text) {
+         throw new Error(`Generování se nezdařilo: ${textPart.text}`);
+    }
+    throw new Error('Generování obrázku selhalo, nebyla vrácena žádná data.');
   }
 
-  return response.generatedImages[0].image.imageBytes;
+  return imagePart.inlineData.data;
 };

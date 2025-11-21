@@ -203,9 +203,6 @@ function App() {
           const newFile = updatedFilesMap.get(cf.id)!;
           // Clean up old object URL
           URL.revokeObjectURL(cf.previewUrl);
-          // FIX: The 'newFile' variable is an object {id: string, file: File}.
-          // URL.createObjectURL expects a File/Blob, not the wrapper object.
-          // The `file` property of the new state should also be the File object itself.
           return { ...cf, file: newFile.file, previewUrl: URL.createObjectURL(newFile.file) };
         }
         return cf;
@@ -250,7 +247,7 @@ function App() {
       case 'home':
         return <HomeView onEnterApp={() => setView('upload')} />;
       case 'upload':
-        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
+        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} addNotification={addNotification} />;
       case 'editor':
         return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} />;
       case 'batch':
@@ -260,7 +257,7 @@ function App() {
       case 'raw-converter':
         return <RAWConverterView {...headerProps} addNotification={addNotification} onFilesConverted={handleRawFilesConverted} />;
       default:
-        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
+        return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} addNotification={addNotification} />;
     }
   };
 

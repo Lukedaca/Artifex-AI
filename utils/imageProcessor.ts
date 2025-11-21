@@ -29,13 +29,13 @@ export const base64ToFile = async (base64: string, filename: string, mimeType: s
 };
 
 /**
- * Normalizes an image file: ensures it's a JPEG and resizes it if it's too large.
- * This helps with performance and meets API constraints.
+ * Normalizes an image file: ensures it's a JPEG and resizes it only if absolutely necessary
+ * to prevent browser crashes, but keeps HIGH resolution (4K+).
  */
 export const normalizeImageFile = (
     file: File,
-    maxSize = 2048,
-    quality = 0.9
+    maxSize = 4500, // Increased from 2048 to 4500 to preserve details
+    quality = 0.98 // Increased quality to prevent artifacts
 ): Promise<File> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -50,14 +50,13 @@ export const normalizeImageFile = (
                     return reject(new Error('Could not get canvas context'));
                 }
 
-                // Calculate new dimensions
-                if (width > height) {
-                    if (width > maxSize) {
+                // Only resize if image is truly massive (saving memory/token limits)
+                // otherwise keep original as much as possible.
+                if (width > maxSize || height > maxSize) {
+                     if (width > height) {
                         height = Math.round((height * maxSize) / width);
                         width = maxSize;
-                    }
-                } else {
-                    if (height > maxSize) {
+                    } else {
                         width = Math.round((width * maxSize) / height);
                         height = maxSize;
                     }
@@ -65,6 +64,11 @@ export const normalizeImageFile = (
 
                 canvas.width = width;
                 canvas.height = height;
+                
+                // Use high quality smoothing
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                
                 ctx.drawImage(img, 0, 0, width, height);
 
                 canvas.toBlob(
@@ -100,7 +104,10 @@ import type { ManualEdits } from '../types';
 
 /**
  * Applies all manual edits to an image and returns a blob for export.
- * This replaces simple CSS filters with real pixel-level manipulation for professional results.
+ * Uses enhanced algorithms for professional results:
+ * - Luminance-based Contrast (prevents saturation shifts)
+ * - Photographic Exposure (instead of linear brightness)
+ * - Luma-weighted Saturation (protects darks/lights)
  */
 export const applyEditsAndExport = (
   imageUrl: string,
@@ -112,7 +119,7 @@ export const applyEditsAndExport = (
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) {
         return reject(new Error('Could not get canvas context'));
       }
@@ -123,190 +130,202 @@ export const applyEditsAndExport = (
       let srcW = img.width;
       let srcH = img.height;
 
-      // Priority 1: Manual Rectangle Crop (from classic crop tool)
+      // Priority 1: Manual Rectangle Crop
       if (edits.cropRect) {
           srcX = Math.max(0, edits.cropRect.x);
           srcY = Math.max(0, edits.cropRect.y);
           srcW = Math.min(img.width - srcX, edits.cropRect.width);
           srcH = Math.min(img.height - srcY, edits.cropRect.height);
       } 
-      // Priority 2: Aspect Ratio Center Crop (fallback)
+      // Priority 2: Aspect Ratio Center Crop
       else if (edits.aspectRatio) {
           const imageRatio = img.width / img.height;
           const targetRatio = edits.aspectRatio;
 
           if (imageRatio > targetRatio) {
-              // Image is wider than target -> Crop width
               srcW = img.height * targetRatio;
               srcX = (img.width - srcW) / 2;
           } else {
-              // Image is taller than target -> Crop height
               srcH = img.width / targetRatio;
               srcY = (img.height - srcH) / 2;
           }
       }
 
-      // --- 2. Set Canvas Size based on Output Scale ---
+      // --- 2. Set Canvas Size ---
+      // Ensure we are exporting at high resolution based on options
       const finalWidth = Math.floor(srcW * options.scale);
       const finalHeight = Math.floor(srcH * options.scale);
       
       canvas.width = finalWidth;
       canvas.height = finalHeight;
       
-      // Draw the cropped portion of the image onto the canvas
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, finalWidth, finalHeight);
 
-      // Get pixel data to apply real edits
-      const imageData = ctx.getImageData(0, 0, finalWidth, finalHeight);
-      const data = imageData.data;
+      // If no pixel edits are needed, skip the heavy loop
+      const hasPixelEdits = 
+          edits.brightness !== 0 || edits.contrast !== 0 || 
+          edits.saturation !== 0 || edits.vibrance !== 0 || 
+          edits.shadows !== 0 || edits.highlights !== 0 ||
+          edits.noiseReduction > 0 || edits.sharpness > 0 || edits.clarity > 0;
 
-      // Prepare edit factors
-      const brightness = edits.brightness * 2.55; // scale to -255 to 255
-      const contrastFactor = (100 + edits.contrast) / 100;
-      const saturationFactor = (100 + edits.saturation) / 100;
-      const vibranceFactor = edits.vibrance / 100;
-      const shadowsFactor = edits.shadows / 100;
-      const highlightsFactor = edits.highlights / 100;
+      if (hasPixelEdits) {
+          const imageData = ctx.getImageData(0, 0, finalWidth, finalHeight);
+          const data = imageData.data;
 
-      // Loop through every pixel and apply color/tone adjustments
-      for (let i = 0; i < data.length; i += 4) {
-        let r = data[i];
-        let g = data[i + 1];
-        let b = data[i + 2];
-        
-        // --- Tonal Adjustments ---
-        // Brightness
-        if (brightness !== 0) {
-            r += brightness;
-            g += brightness;
-            b += brightness;
-        }
-        
-        // Contrast
-        if (contrastFactor !== 1) {
-            r = 128 + contrastFactor * (r - 128);
-            g = 128 + contrastFactor * (g - 128);
-            b = 128 + contrastFactor * (b - 128);
-        }
+          // Pre-calculate static values outside loop for performance
+          const exposureMultiplier = Math.pow(2, edits.brightness / 100); 
+          const contrastFactor = (1.015 * (edits.contrast + 100)) / (100 * (1.015 - edits.contrast / 100));
+          const saturationScale = 1 + (edits.saturation / 100);
+          const vibranceScale = 1 + (edits.vibrance / 100);
+          const shadowLift = edits.shadows * 0.8;
+          const highlightRec = -(edits.highlights * 0.8);
 
-        // Shadows & Highlights
-        const luminance = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]; // Use original luminance
-        if (highlightsFactor !== 0) {
-            const highlightAmount = highlightsFactor * (luminance / 255);
-            r += highlightAmount * (255 - r);
-            g += highlightAmount * (255 - g);
-            b += highlightAmount * (255 - b);
-        }
-        if (shadowsFactor !== 0) {
-            const shadowAmount = shadowsFactor * (1 - (luminance / 255));
-            r += shadowAmount * r;
-            g += shadowAmount * g;
-            b += shadowAmount * b;
-        }
+          for (let i = 0; i < data.length; i += 4) {
+            let r = data[i];
+            let g = data[i + 1];
+            let b = data[i + 2];
+            
+            // --- 1. Exposure (Brightness) ---
+            r *= exposureMultiplier;
+            g *= exposureMultiplier;
+            b *= exposureMultiplier;
 
-        // --- Color Adjustments ---
-        // Vibrance
-        if (vibranceFactor !== 0) {
-            const max = Math.max(r, g, b);
-            const avg = (r + g + b) / 3;
-            const sat = (max - avg) / 128; // Approx saturation 0-2
-            const boost = vibranceFactor * (1 - sat);
-            if (boost > 0) {
-                r += (max - r) * boost;
-                g += (max - g) * boost;
-                b += (max - b) * boost;
+            // Calculate Luminance (Rec. 709)
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+            // --- 2. Contrast (Luminance Only) ---
+            let newLum = 128 + contrastFactor * (lum - 128);
+            newLum = Math.max(0, Math.min(255, newLum)); // Clamp
+            
+            if (lum > 1) { // Avoid divide by zero
+                const ratio = newLum / lum;
+                r *= ratio;
+                g *= ratio;
+                b *= ratio;
+                lum = newLum;
             }
-        }
-        
-        // Saturation
-        if (saturationFactor !== 1) {
-            const gray = r * 0.3 + g * 0.59 + b * 0.11;
-            r = gray * (1 - saturationFactor) + r * saturationFactor;
-            g = gray * (1 - saturationFactor) + g * saturationFactor;
-            b = gray * (1 - saturationFactor) + b * saturationFactor;
-        }
 
-        // Clamp values to 0-255 range
-        data[i] = Math.max(0, Math.min(255, r));
-        data[i + 1] = Math.max(0, Math.min(255, g));
-        data[i + 2] = Math.max(0, Math.min(255, b));
-      }
+            // --- 3. Shadows & Highlights (Luminance Masking) ---
+            if (edits.shadows !== 0 || edits.highlights !== 0) {
+                const normLum = lum / 255;
+                
+                if (edits.shadows !== 0) {
+                    // Darker areas get more effect
+                    const shadowMask = (1.0 - normLum) * (1.0 - normLum);
+                    const lift = shadowLift * shadowMask;
+                    r += lift; g += lift; b += lift;
+                }
 
-      ctx.putImageData(imageData, 0, 0);
+                if (edits.highlights !== 0) {
+                    // Brighter areas get more effect
+                    const highlightMask = normLum * normLum;
+                    const recovery = highlightRec * highlightMask;
+                    r += recovery; g += recovery; b += recovery;
+                }
+            }
 
-      // --- Clarity, Sharpness, Noise Reduction ---
-      // Apply these after color/tone. Noise reduction first, then sharpening/clarity.
+            // --- 4. Saturation & Vibrance ---
+            if (edits.saturation !== 0 || edits.vibrance !== 0) {
+                // Recalc lum for accurate color mixing
+                lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                
+                let max = Math.max(r, g, b);
+                let min = Math.min(r, g, b);
+                let delta = max - min;
+                let currentSat = (max === 0) ? 0 : delta / max;
 
-      // Noise Reduction (as a blur)
-      if (edits.noiseReduction > 0) {
-          ctx.filter = `blur(${edits.noiseReduction / 50}px)`; // subtle blur
-          ctx.drawImage(canvas, 0, 0, finalWidth, finalHeight);
-          ctx.filter = 'none'; // reset for next operations
-      }
+                let totalSatMult = saturationScale;
 
-      // Sharpening & Clarity
-      if (edits.sharpness > 0 || edits.clarity > 0) {
-        // Clarity is a form of local contrast, we'll simulate it with a sharpening pass
-        // that has a wider reach, combined with the dedicated sharpness.
-        const totalSharpenStrength = (edits.sharpness / 100) + (edits.clarity / 150);
+                if (edits.vibrance !== 0) {
+                    const vibFactor = (1 - currentSat); 
+                    totalSatMult += ((vibranceScale - 1) * vibFactor);
+                }
 
-        if (totalSharpenStrength > 0) {
-            const sharpData = ctx.getImageData(0, 0, finalWidth, finalHeight);
-            const pixels = sharpData.data;
-            const tempPixels = new Uint8ClampedArray(pixels);
-            
-            const kernel = [ [0, -1, 0], [-1, 5, -1], [0, -1, 0] ];
-            
-            // FIX: Using nested loops for x/y to avoid floating point index errors
-            // which caused black/NaN pixels in previous implementation.
-            for (let y = 0; y < finalHeight; y++) {
-                for (let x = 0; x < finalWidth; x++) {
-                    let r = 0, g = 0, b = 0;
-                    const pixelIndex = (y * finalWidth + x) * 4;
+                r = lum + (r - lum) * totalSatMult;
+                g = lum + (g - lum) * totalSatMult;
+                b = lum + (b - lum) * totalSatMult;
+            }
 
-                    // Convolution Loop
-                    for (let ky = -1; ky <= 1; ky++) {
-                        for (let kx = -1; kx <= 1; kx++) {
-                            const py = y + ky;
-                            const px = x + kx;
+            // Final Clamp
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i + 1] = Math.max(0, Math.min(255, g));
+            data[i + 2] = Math.max(0, Math.min(255, b));
+          }
 
-                            // Bounds check
-                            if (px >= 0 && px < finalWidth && py >= 0 && py < finalHeight) {
-                                const neighborIdx = (py * finalWidth + px) * 4;
-                                const weight = kernel[ky + 1][kx + 1];
-                                r += tempPixels[neighborIdx] * weight;
-                                g += tempPixels[neighborIdx + 1] * weight;
-                                b += tempPixels[neighborIdx + 2] * weight;
+          ctx.putImageData(imageData, 0, 0);
+
+          // --- 5. Sharpness / Clarity / Noise ---
+          // Using integer math where possible to avoid floating point errors causing black screen
+          if (edits.noiseReduction > 0 || edits.sharpness > 0 || edits.clarity > 0) {
+               const tempCanvas = document.createElement('canvas');
+               tempCanvas.width = finalWidth;
+               tempCanvas.height = finalHeight;
+               const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
+               
+               // Noise Reduction
+               if (edits.noiseReduction > 0) {
+                   tempCtx.drawImage(canvas, 0, 0);
+                   ctx.filter = `blur(${edits.noiseReduction / 40}px)`; 
+                   ctx.drawImage(tempCanvas, 0, 0);
+                   ctx.filter = 'none';
+               }
+
+               // Sharpness / Clarity
+               if (edits.sharpness > 0 || edits.clarity > 0) {
+                    const sharpData = ctx.getImageData(0, 0, finalWidth, finalHeight);
+                    const pixels = sharpData.data;
+                    const sourceData = new Uint8ClampedArray(pixels);
+                    
+                    const sharpAmount = edits.sharpness / 100;
+                    const clarityAmount = edits.clarity / 80;
+                    const threshold = 10; 
+
+                    // Skip edges
+                    for (let y = 1; y < finalHeight - 1; y++) {
+                        for (let x = 1; x < finalWidth - 1; x++) {
+                            const idx = (y * finalWidth + x) * 4;
+                            
+                            for (let c = 0; c < 3; c++) {
+                                const val = sourceData[idx + c];
+                                
+                                // Neighbor indices
+                                const up = sourceData[((y - 1) * finalWidth + x) * 4 + c];
+                                const down = sourceData[((y + 1) * finalWidth + x) * 4 + c];
+                                const left = sourceData[(y * finalWidth + (x - 1)) * 4 + c];
+                                const right = sourceData[(y * finalWidth + (x + 1)) * 4 + c];
+
+                                // Simple Laplacian Filter
+                                const laplacian = (4 * val) - (up + down + left + right);
+
+                                if (Math.abs(laplacian) > threshold) {
+                                    let newVal = val;
+                                    // Add sharpness (high freq)
+                                    newVal += (laplacian * sharpAmount);
+                                    // Add clarity (mid freq boost simulation)
+                                    newVal += (laplacian * clarityAmount * 0.6);
+                                    
+                                    pixels[idx + c] = Math.max(0, Math.min(255, newVal));
+                                }
                             }
                         }
                     }
-
-                    // Mix original with sharpened result
-                    pixels[pixelIndex] = tempPixels[pixelIndex] * (1 - totalSharpenStrength) + r * totalSharpenStrength;
-                    pixels[pixelIndex + 1] = tempPixels[pixelIndex + 1] * (1 - totalSharpenStrength) + g * totalSharpenStrength;
-                    pixels[pixelIndex + 2] = tempPixels[pixelIndex + 2] * (1 - totalSharpenStrength) + b * totalSharpenStrength;
-                }
-            }
-            
-            ctx.putImageData(sharpData, 0, 0);
-        }
+                    ctx.putImageData(sharpData, 0, 0);
+               }
+          }
       }
 
-      // --- Export to Blob ---
+      // Export
       const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
-      const quality = options.format === 'jpeg' ? options.quality / 100 : undefined;
+      // Ensure quality is never below 0.1 or above 1
+      const quality = options.format === 'jpeg' ? Math.max(0.1, Math.min(1, options.quality / 100)) : undefined;
       
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Canvas toBlob failed.'));
-          }
-        },
-        mimeType,
-        quality
-      );
+      canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas toBlob failed.'));
+        }, mimeType, quality);
     };
     img.onerror = () => reject(new Error('Failed to load image for editing.'));
     img.src = imageUrl;
