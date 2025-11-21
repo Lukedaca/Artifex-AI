@@ -1,3 +1,4 @@
+
 /**
  * Converts a File object to a base64 encoded string, without the data URL prefix.
  */
@@ -116,16 +117,47 @@ export const applyEditsAndExport = (
         return reject(new Error('Could not get canvas context'));
       }
 
-      const width = img.width * options.scale;
-      const height = img.height * options.scale;
-      canvas.width = width;
-      canvas.height = height;
+      // --- 1. Calculate Dimensions based on Crop ---
+      let srcX = 0;
+      let srcY = 0;
+      let srcW = img.width;
+      let srcH = img.height;
+
+      // Priority 1: Manual Rectangle Crop (from classic crop tool)
+      if (edits.cropRect) {
+          srcX = Math.max(0, edits.cropRect.x);
+          srcY = Math.max(0, edits.cropRect.y);
+          srcW = Math.min(img.width - srcX, edits.cropRect.width);
+          srcH = Math.min(img.height - srcY, edits.cropRect.height);
+      } 
+      // Priority 2: Aspect Ratio Center Crop (fallback)
+      else if (edits.aspectRatio) {
+          const imageRatio = img.width / img.height;
+          const targetRatio = edits.aspectRatio;
+
+          if (imageRatio > targetRatio) {
+              // Image is wider than target -> Crop width
+              srcW = img.height * targetRatio;
+              srcX = (img.width - srcW) / 2;
+          } else {
+              // Image is taller than target -> Crop height
+              srcH = img.width / targetRatio;
+              srcY = (img.height - srcH) / 2;
+          }
+      }
+
+      // --- 2. Set Canvas Size based on Output Scale ---
+      const finalWidth = Math.floor(srcW * options.scale);
+      const finalHeight = Math.floor(srcH * options.scale);
       
-      // Draw initial image
-      ctx.drawImage(img, 0, 0, width, height);
+      canvas.width = finalWidth;
+      canvas.height = finalHeight;
+      
+      // Draw the cropped portion of the image onto the canvas
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, finalWidth, finalHeight);
 
       // Get pixel data to apply real edits
-      const imageData = ctx.getImageData(0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, finalWidth, finalHeight);
       const data = imageData.data;
 
       // Prepare edit factors
@@ -208,7 +240,7 @@ export const applyEditsAndExport = (
       // Noise Reduction (as a blur)
       if (edits.noiseReduction > 0) {
           ctx.filter = `blur(${edits.noiseReduction / 50}px)`; // subtle blur
-          ctx.drawImage(canvas, 0, 0, width, height);
+          ctx.drawImage(canvas, 0, 0, finalWidth, finalHeight);
           ctx.filter = 'none'; // reset for next operations
       }
 
@@ -219,36 +251,43 @@ export const applyEditsAndExport = (
         const totalSharpenStrength = (edits.sharpness / 100) + (edits.clarity / 150);
 
         if (totalSharpenStrength > 0) {
-            const sharpData = ctx.getImageData(0, 0, width, height);
+            const sharpData = ctx.getImageData(0, 0, finalWidth, finalHeight);
             const pixels = sharpData.data;
             const tempPixels = new Uint8ClampedArray(pixels);
             
             const kernel = [ [0, -1, 0], [-1, 5, -1], [0, -1, 0] ];
             
-            for (let i = 0; i < pixels.length; i++) {
-              if ((i + 1) % 4 === 0) continue; // Skip alpha
-              const y = Math.floor(i / (width * 4));
-              const x = (i / 4) % width;
-              let r = 0, g = 0, b = 0;
+            // FIX: Using nested loops for x/y to avoid floating point index errors
+            // which caused black/NaN pixels in previous implementation.
+            for (let y = 0; y < finalHeight; y++) {
+                for (let x = 0; x < finalWidth; x++) {
+                    let r = 0, g = 0, b = 0;
+                    const pixelIndex = (y * finalWidth + x) * 4;
 
-              for (let ky = -1; ky <= 1; ky++) {
-                  for (let kx = -1; kx <= 1; kx++) {
-                      const px = x + kx;
-                      const py = y + ky;
-                      if (px >= 0 && px < width && py >= 0 && py < height) {
-                          const index = (py * width + px) * 4;
-                          const weight = kernel[ky + 1][kx + 1];
-                          r += tempPixels[index] * weight;
-                          g += tempPixels[index + 1] * weight;
-                          b += tempPixels[index + 2] * weight;
-                      }
-                  }
-              }
-              const originalIndex = (y * width + x) * 4;
-              pixels[originalIndex] = tempPixels[originalIndex] * (1 - totalSharpenStrength) + r * totalSharpenStrength;
-              pixels[originalIndex + 1] = tempPixels[originalIndex + 1] * (1 - totalSharpenStrength) + g * totalSharpenStrength;
-              pixels[originalIndex + 2] = tempPixels[originalIndex + 2] * (1 - totalSharpenStrength) + b * totalSharpenStrength;
+                    // Convolution Loop
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const py = y + ky;
+                            const px = x + kx;
+
+                            // Bounds check
+                            if (px >= 0 && px < finalWidth && py >= 0 && py < finalHeight) {
+                                const neighborIdx = (py * finalWidth + px) * 4;
+                                const weight = kernel[ky + 1][kx + 1];
+                                r += tempPixels[neighborIdx] * weight;
+                                g += tempPixels[neighborIdx + 1] * weight;
+                                b += tempPixels[neighborIdx + 2] * weight;
+                            }
+                        }
+                    }
+
+                    // Mix original with sharpened result
+                    pixels[pixelIndex] = tempPixels[pixelIndex] * (1 - totalSharpenStrength) + r * totalSharpenStrength;
+                    pixels[pixelIndex + 1] = tempPixels[pixelIndex + 1] * (1 - totalSharpenStrength) + g * totalSharpenStrength;
+                    pixels[pixelIndex + 2] = tempPixels[pixelIndex + 2] * (1 - totalSharpenStrength) + b * totalSharpenStrength;
+                }
             }
+            
             ctx.putImageData(sharpData, 0, 0);
         }
       }

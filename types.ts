@@ -1,3 +1,4 @@
+
 // FIX: Define all necessary types for the application.
 
 export interface UploadedFile {
@@ -35,7 +36,8 @@ export interface ManualEdits {
   clarity: number;
   sharpness: number;
   noiseReduction: number;
-  crop?: CropCoordinates;
+  cropRect?: CropCoordinates; // Specific manual crop rectangle
+  aspectRatio?: number; // Center crop fallback
 }
 
 export interface CropCoordinates {
@@ -50,7 +52,7 @@ export type EditorAction = {
   timestamp: number;
 } | null;
 
-export type View = 'home' | 'upload' | 'editor' | 'batch' | 'generate';
+export type View = 'home' | 'upload' | 'editor' | 'batch' | 'generate' | 'raw-converter';
 
 // --- History ---
 export interface HistoryEntry {
@@ -70,7 +72,7 @@ export interface History {
 export interface Preset {
   id: string;
   name: string;
-  edits: Omit<ManualEdits, 'crop'>;
+  edits: Omit<ManualEdits, 'cropRect'>;
 }
 
 export interface AutopilotTendencies {

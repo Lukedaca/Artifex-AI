@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useReducer } from 'react';
 
 // Views
@@ -6,16 +7,18 @@ import UploadView from './components/UploadView';
 import EditorView from './components/EditorView';
 import BatchView from './components/BatchView';
 import GenerateImageView from './components/GenerateImageView';
+import RAWConverterView from './components/RAWConverterView';
 
 // Components
 import Sidebar from './components/Sidebar';
 import ApiKeyModal from './components/ApiKeyModal';
-import { ToastContainer } from './components/ToastNotification';
+import { XCircleIcon } from './components/icons';
 
 // Types
 import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } from './types';
 
 // Utils & Services
+import { hasSelectedApiKey } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
 import { getPresets } from './services/userProfileService';
 
@@ -66,7 +69,7 @@ function historyReducer(state: History, action: { type: 'SET'; payload: HistoryE
 interface Notification {
   id: number;
   message: string;
-  type: 'info' | 'error' | 'success' | 'warning';
+  type: 'info' | 'error';
 }
 
 function App() {
@@ -78,6 +81,7 @@ function App() {
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
 
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [apiKeyChecked, setApiKeyChecked] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -87,6 +91,19 @@ function App() {
 
 
   // --- Effects ---
+
+  // API Key Check
+  useEffect(() => {
+    if (view === 'home' || apiKeyChecked) return;
+    const checkKey = async () => {
+        const hasKey = await hasSelectedApiKey();
+        if (!hasKey) {
+            setIsApiKeyModalOpen(true);
+        }
+        setApiKeyChecked(true); // only check once per session
+    };
+    checkKey();
+  }, [view, apiKeyChecked]);
 
   // Load presets
   useEffect(() => {
@@ -112,7 +129,7 @@ function App() {
     }
   }, [files, activeFileId]);
 
-  const addNotification = useCallback((message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
+  const addNotification = useCallback((message: string, type: 'info' | 'error' = 'info') => {
     const id = Date.now();
     setNotifications(n => [...n, { id, message, type }]);
     setTimeout(() => {
@@ -142,14 +159,12 @@ function App() {
     const promises = selectedFiles.map(async file => {
       try {
         const normalizedFile = await normalizeImageFile(file);
-        // Create TWO separate blob URLs to prevent revokeObjectURL from breaking compare mode
         const previewUrl = URL.createObjectURL(normalizedFile);
-        const originalPreviewUrl = URL.createObjectURL(normalizedFile);
         validFiles.push({
           id: `${Date.now()}-${Math.random()}`,
           file: normalizedFile,
           previewUrl: previewUrl,
-          originalPreviewUrl: originalPreviewUrl,
+          originalPreviewUrl: previewUrl,
         });
       } catch (error) {
         addNotification(`Soubor ${file.name} není podporován.`, 'error');
@@ -168,14 +183,12 @@ function App() {
   }, [addNotification, setFiles]);
 
   const handleImageGenerated = useCallback((file: File) => {
-    // Create TWO separate blob URLs to prevent revokeObjectURL from breaking compare mode
     const previewUrl = URL.createObjectURL(file);
-    const originalPreviewUrl = URL.createObjectURL(file);
     const newFile: UploadedFile = {
       id: `${Date.now()}-${Math.random()}`,
       file: file,
       previewUrl: previewUrl,
-      originalPreviewUrl: originalPreviewUrl,
+      originalPreviewUrl: previewUrl,
     };
     setFiles(currentFiles => [...currentFiles, newFile], 'Generován obrázek');
     setView('editor');
@@ -188,7 +201,7 @@ function App() {
       currentFiles => currentFiles.map(cf => {
         if (updatedFilesMap.has(cf.id)) {
           const newFile = updatedFilesMap.get(cf.id)!;
-          // Clean up old preview URL (but NOT originalPreviewUrl for compare mode)
+          // Clean up old object URL
           URL.revokeObjectURL(cf.previewUrl);
           // FIX: The 'newFile' variable is an object {id: string, file: File}.
           // URL.createObjectURL expects a File/Blob, not the wrapper object.
@@ -201,16 +214,28 @@ function App() {
     );
     setView('editor');
   }, [setFiles]);
+  
+  const handleRawFilesConverted = useCallback((files: File[]) => {
+      handleFilesSelected(files);
+  }, [handleFilesSelected]);
 
-  const handleKeySelectionAttempt = useCallback(() => {
+  const handleKeySelectionAttempt = useCallback(async () => {
     setIsApiKeyModalOpen(false);
-  }, []);
-
+    const hasKey = await hasSelectedApiKey();
+    if (!hasKey) {
+      setTimeout(() => {
+          addNotification('Pro plnou funkčnost je potřeba vybrat API klíč.', 'error');
+          setIsApiKeyModalOpen(true);
+      }, 500); // Re-open if they closed without selecting
+    }
+  }, [addNotification]);
+  
   const getPageTitle = () => {
       if (view === 'upload') return 'Nahrát fotky';
       if (view === 'editor') return 'Editor & AI Analýza';
       if (view === 'batch') return 'Hromadné zpracování';
       if (view === 'generate') return 'Generátor obrázků';
+      if (view === 'raw-converter') return 'RAW Konvertor';
       return 'Dashboard';
   }
 
@@ -227,11 +252,13 @@ function App() {
       case 'upload':
         return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
       case 'editor':
-        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} />;
+        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} />;
       case 'batch':
         return <BatchView {...headerProps} files={files} onBatchComplete={handleBatchComplete} addNotification={addNotification} />;
       case 'generate':
         return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} />;
+      case 'raw-converter':
+        return <RAWConverterView {...headerProps} addNotification={addNotification} onFilesConverted={handleRawFilesConverted} />;
       default:
         return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} />;
     }
@@ -255,13 +282,19 @@ function App() {
         <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
             {renderView()}
         </main>
-
+        
         <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
 
-        <ToastContainer
-          notifications={notifications}
-          onClose={(id) => setNotifications(current => current.filter(notif => notif.id !== id))}
-        />
+        <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
+            {notifications.map(n => (
+                <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-200'}`}>
+                    <span className="flex-1">{n.message}</span>
+                    <button onClick={() => setNotifications(current => current.filter(notif => notif.id !== n.id))} className="ml-4 -mr-1 p-1 rounded-full hover:bg-black/10">
+                        <XCircleIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            ))}
+        </div>
     </div>
   );
 }
