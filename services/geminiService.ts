@@ -81,6 +81,12 @@ const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2
                 { text: prompt },
             ],
         },
+        // CRITICAL: Low temperature reduces creativity/hallucinations and forces the model to adhere strictly to the image structure.
+        config: {
+            temperature: 0.1,
+            topP: 0.95,
+            topK: 64,
+        }
     });
 
     const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
@@ -100,21 +106,22 @@ const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2
  */
 export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   const prompt = `
-      Role: Professional Photo Retoucher.
-      Task: Enhance this image's lighting, color, and clarity.
+      Role: Expert Image Processing AI.
+      Task: Apply global photographic enhancements to lighting and color.
 
-      **CRITICAL RULES (VIOLATION = FAILURE):**
-      1.  **PRESERVE FACIAL INTEGRITY:** Do NOT change facial features, eyes, nose, or mouth shape. Do NOT warp the face.
-      2.  **NO HALLUCINATIONS:** Do NOT add or remove objects.
-      3.  **NATURAL LOOK:** Do not make it look like a cartoon. Keep skin texture.
+      **STRICT CONSTRAINTS (DO NOT VIOLATE):**
+      1.  **STRUCTURAL FIDELITY:** Do NOT change the shape, position, or geometry of ANY object. Do NOT warp faces. Do NOT move pixels.
+      2.  **NO GENERATION:** Do NOT add details (hair, skin texture, objects) that are not present in the source.
+      3.  **IDENTITY PRESERVATION:** Facial features must remain exactly as they are pixel-for-pixel, only lighting/color should change.
+      4.  **NO SMOOTHING:** Do not apply "beautification" filters that blur skin texture. Keep natural grain.
 
-      **Adjustments to Apply:**
-      1.  **Lighting:** Balance exposure. Gently lift shadows and recover highlights.
-      2.  **Color:** Correct white balance. Improve skin tones to be natural and healthy.
-      3.  **Contrast:** Add depth (micro-contrast) without crushing blacks.
-      4.  **Clarity:** Sharpen details slightly.
+      **REQUIRED ADJUSTMENTS:**
+      - **Exposure:** Balance the histogram. Recover details in highlights and lift crushed shadows slightly.
+      - **White Balance:** Neutralize color casts.
+      - **Contrast:** Increase perceptual depth (micro-contrast) without over-saturating.
+      - **Color:** Ensure skin tones are natural and vibrant, not orange or plastic.
 
-      Output: The exact same photo, but better developed.
+      Output: The exact same image content, but with professional color grading.
   `;
   // Use 2.5-flash-image for editing to avoid 3-pro's tendency to hallucinate faces
   return editImageWithPrompt(file, prompt, 'gemini-2.5-flash-image');
@@ -125,7 +132,7 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
  */
 export const removeObject = async (file: File, objectToRemove: string): Promise<{ file: File }> => {
     if (!objectToRemove) throw new Error("Please specify what to remove.");
-    return editImageWithPrompt(file, `Remove the following object from the image: ${objectToRemove}. Fill in the background seamlessly and naturally matching the surrounding texture, lighting, and noise profile.`);
+    return editImageWithPrompt(file, `Remove the following object from the image: ${objectToRemove}. Fill in the background seamlessly and naturally matching the surrounding texture, lighting, and noise profile. Do not distort the rest of the image.`);
 };
 
 /**
@@ -163,7 +170,7 @@ export const autoCrop = async (file: File, aspectRatio: string = 'Original', ins
  */
 export const replaceBackground = async (file: File, newBackgroundPrompt: string): Promise<{ file: File }> => {
     if (!newBackgroundPrompt) throw new Error("Please describe the new background.");
-    return editImageWithPrompt(file, `Replace the background of this image with the following scene: ${newBackgroundPrompt}. Ensure the foreground subject is integrated naturally with correct lighting match, shadow casting, and color grading.`);
+    return editImageWithPrompt(file, `Replace the background of this image with the following scene: ${newBackgroundPrompt}. Ensure the foreground subject is integrated naturally with correct lighting match, shadow casting, and color grading. Maintain the integrity of the foreground subject perfectly.`);
 };
 
 /**
@@ -182,9 +189,12 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
             parts: [
                 { inlineData: { data: originalBase64, mimeType: originalFile.type } },
                 { inlineData: { data: styleBase64, mimeType: styleFile.type } },
-                { text: "Apply the artistic style, color palette, and lighting of the second image to the content of the first image. Maintain the structural integrity of the primary subject in the first image." },
+                { text: "Apply the artistic style, color palette, and lighting of the second image to the content of the first image. Maintain the structural integrity of the primary subject in the first image. Do not distort faces." },
             ],
         },
+        config: {
+            temperature: 0.1
+        }
     });
 
     const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);

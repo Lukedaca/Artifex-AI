@@ -30,11 +30,11 @@ export const base64ToFile = async (base64: string, filename: string, mimeType: s
 
 /**
  * Normalizes an image file: ensures it's a JPEG and resizes it only if absolutely necessary
- * to prevent browser crashes, but keeps HIGH resolution (4K+).
+ * to prevent browser crashes, but keeps HIGH resolution (6K+).
  */
 export const normalizeImageFile = (
     file: File,
-    maxSize = 4500, // Increased from 2048 to 4500 to preserve details
+    maxSize = 6000, // Increased to 6000 to support full resolution of most cameras (24MP)
     quality = 0.98 // Increased quality to prevent artifacts
 ): Promise<File> => {
     return new Promise((resolve, reject) => {
@@ -164,7 +164,7 @@ export const applyEditsAndExport = (
 
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, finalWidth, finalHeight);
 
-      // If no pixel edits are needed, skip the heavy loop
+      // Check if any pixel edits are actually required
       const hasPixelEdits = 
           edits.brightness !== 0 || edits.contrast !== 0 || 
           edits.saturation !== 0 || edits.vibrance !== 0 || 
@@ -189,23 +189,27 @@ export const applyEditsAndExport = (
             let b = data[i + 2];
             
             // --- 1. Exposure (Brightness) ---
-            r *= exposureMultiplier;
-            g *= exposureMultiplier;
-            b *= exposureMultiplier;
+            if (edits.brightness !== 0) {
+                r *= exposureMultiplier;
+                g *= exposureMultiplier;
+                b *= exposureMultiplier;
+            }
 
             // Calculate Luminance (Rec. 709)
             let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
             // --- 2. Contrast (Luminance Only) ---
-            let newLum = 128 + contrastFactor * (lum - 128);
-            newLum = Math.max(0, Math.min(255, newLum)); // Clamp
-            
-            if (lum > 1) { // Avoid divide by zero
-                const ratio = newLum / lum;
-                r *= ratio;
-                g *= ratio;
-                b *= ratio;
-                lum = newLum;
+            if (edits.contrast !== 0) {
+                let newLum = 128 + contrastFactor * (lum - 128);
+                newLum = Math.max(0, Math.min(255, newLum)); // Clamp
+                
+                if (lum > 1) { // Avoid divide by zero
+                    const ratio = newLum / lum;
+                    r *= ratio;
+                    g *= ratio;
+                    b *= ratio;
+                    lum = newLum;
+                }
             }
 
             // --- 3. Shadows & Highlights (Luminance Masking) ---

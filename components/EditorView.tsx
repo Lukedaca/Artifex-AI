@@ -122,8 +122,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   // --- Manual Crop State ---
   const [isManualCropping, setIsManualCropping] = useState(false);
   const [cropSelection, setCropSelection] = useState<{x: number, y: number, w: number, h: number} | null>(null);
-  const [isDraggingCrop, setIsDraggingCrop] = useState(false);
-  const [cropStart, setCropStart] = useState<{x: number, y: number} | null>(null);
+  
+  // 'create' = drawing new box, 'move' = dragging whole box, 'resize-nw' = resizing from top-left, etc.
+  type InteractionMode = 'none' | 'create' | 'move' | 'resize-nw' | 'resize-ne' | 'resize-sw' | 'resize-se';
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
+  const [cropStart, setCropStart] = useState<{x: number, y: number} | null>(null); // Mouse start pos in %
+  const [cropAnchor, setCropAnchor] = useState<{x: number, y: number, w: number, h: number} | null>(null); // Initial rect state before drag
 
 
   const [showFeedback, setShowFeedback] = useState<string | null>(null); // actionId for feedback
@@ -165,7 +169,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         const imageBlob = await applyEditsAndExport(
           activeFile.previewUrl,
           manualEdits,
-          { format: 'jpeg', quality: 80, scale: 0.8 } // Lower scale/quality slightly for faster live preview
+          // IMPORTANT: Use scale 1 to ensure what the user sees is high quality (no blur).
+          // Quality 0.85 is a trade-off for speed during preview generation.
+          { format: 'jpeg', quality: 85, scale: 1 }
         );
         const objectUrl = URL.createObjectURL(imageBlob);
         setEditedPreviewUrl(objectUrl);
@@ -216,11 +222,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
       if (isManualCropping) {
-          // Only start crop drag if we are not already in confirmation mode (cropSelection present)
-          if (!cropSelection || (cropSelection.w === 0 && cropSelection.h === 0)) {
-            handleCropStart(e);
-          }
-          return;
+        handleCropInteractionStart(e);
+        return;
       }
 
       if (isDraggingSlider) return; // Let slider logic handle its own drag
@@ -235,8 +238,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   };
 
   const handleMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
-      if (isManualCropping && isDraggingCrop) {
-          handleCropMove(e);
+      if (isManualCropping && interactionMode !== 'none') {
+          handleCropInteractionMove(e);
           return;
       }
 
@@ -254,11 +257,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
           setLastMousePosition({ x: clientX, y: clientY });
       }
-  }, [isPanning, lastMousePosition, isManualCropping, isDraggingCrop]);
+  }, [isPanning, lastMousePosition, isManualCropping, interactionMode]); // Added interactionMode dependency
 
   const handleMouseUp = useCallback((e: MouseEvent | TouchEvent) => {
       if (isManualCropping) {
-          handleCropEnd();
+          handleCropInteractionEnd();
           return;
       }
       setIsPanning(false);
@@ -304,52 +307,153 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       setIsManualCropping(true);
       setZoomLevel(1); // Reset zoom for easier cropping
       setPanPosition({x: 0, y: 0});
-      setCropSelection(null);
-      addNotification('Režim ořezu aktivní: Táhněte myší přes obrázek pro výběr.', 'info');
+      // Don't clear selection if one already exists (from previous edit), just re-enable handles
+      if (!manualEdits.cropRect) {
+         setCropSelection(null);
+      }
+      addNotification('Režim ořezu aktivní.', 'info');
   };
 
   const cancelManualCropMode = () => {
       setIsManualCropping(false);
-      setCropSelection(null);
+      // If we had a confirmed edit, keep it visually? No, 'Cancel' means discard changes not yet applied
+      // If there were edits applied, they remain in manualEdits.cropRect
+      setCropSelection(null); 
   };
 
-  const handleCropStart = (e: React.MouseEvent | React.TouchEvent) => {
-      if (!imageRef.current) return;
-      
+  // Helper to get % coordinates from event
+  const getRelativeCoords = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent) => {
+      if (!imageRef.current) return { x: 0, y: 0 };
       const rect = imageRef.current.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as any).clientX;
+      const clientY = 'touches' in e ? (e as any).touches[0].clientY : (e as any).clientY;
       
-      // Calculate relative position within image 0-100%
       const x = ((clientX - rect.left) / rect.width) * 100;
       const y = ((clientY - rect.top) / rect.height) * 100;
-      
-      setCropStart({ x, y });
-      setCropSelection({ x, y, w: 0, h: 0 }); // Start with 0 size
-      setIsDraggingCrop(true);
+      return { x, y };
   };
 
-  const handleCropMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDraggingCrop || !cropStart || !imageRef.current) return;
+  const handleCropInteractionStart = (e: React.MouseEvent | React.TouchEvent) => {
+      const coords = getRelativeCoords(e);
       
-      const rect = imageRef.current.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      
-      const currentX = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-      const currentY = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
-      
-      const x = Math.min(currentX, cropStart.x);
-      const y = Math.min(currentY, cropStart.y);
-      const w = Math.abs(currentX - cropStart.x);
-      const h = Math.abs(currentY - cropStart.y);
-      
-      setCropSelection({ x, y, w, h });
+      // 1. Hit Test: Check if hitting handles or rect body
+      if (cropSelection) {
+          const handleSize = 5; // Threshold in % (rough approx)
+
+          // Helper to check distance to a point
+          const isNear = (px: number, py: number) => Math.abs(px - coords.x) < handleSize && Math.abs(py - coords.y) < handleSize * (imageRef.current!.offsetWidth / imageRef.current!.offsetHeight);
+
+          // Top-Left
+          if (isNear(cropSelection.x, cropSelection.y)) {
+              setInteractionMode('resize-nw');
+          } 
+          // Top-Right
+          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y)) {
+              setInteractionMode('resize-ne');
+          }
+          // Bottom-Left
+          else if (isNear(cropSelection.x, cropSelection.y + cropSelection.h)) {
+              setInteractionMode('resize-sw');
+          }
+          // Bottom-Right
+          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y + cropSelection.h)) {
+              setInteractionMode('resize-se');
+          }
+          // Body (Move)
+          else if (
+              coords.x >= cropSelection.x && 
+              coords.x <= cropSelection.x + cropSelection.w && 
+              coords.y >= cropSelection.y && 
+              coords.y <= cropSelection.y + cropSelection.h
+          ) {
+              setInteractionMode('move');
+          } else {
+               // Clicked outside existing rect -> Create new
+               setInteractionMode('create');
+               setCropSelection({ x: coords.x, y: coords.y, w: 0, h: 0 });
+          }
+      } else {
+          setInteractionMode('create');
+          setCropSelection({ x: coords.x, y: coords.y, w: 0, h: 0 });
+      }
+
+      setCropStart(coords);
+      setCropAnchor(cropSelection); // Snapshot current state
   };
 
-  const handleCropEnd = () => {
-      setIsDraggingCrop(false);
+  const handleCropInteractionMove = (e: MouseEvent | TouchEvent) => {
+      if (interactionMode === 'none' || !cropStart || !imageRef.current) return;
+      const current = getRelativeCoords(e);
+      
+      // Clamp values
+      const clamp = (v: number) => Math.max(0, Math.min(100, v));
+      
+      const dx = current.x - cropStart.x;
+      const dy = current.y - cropStart.y;
+
+      if (interactionMode === 'create') {
+          // Create logic
+          const startX = cropStart.x;
+          const startY = cropStart.y;
+          const newX = current.x;
+          const newY = current.y;
+
+          setCropSelection({
+              x: clamp(Math.min(startX, newX)),
+              y: clamp(Math.min(startY, newY)),
+              w: Math.abs(newX - startX),
+              h: Math.abs(newY - startY)
+          });
+
+      } else if (interactionMode === 'move' && cropAnchor) {
+          // Move logic
+          let newX = cropAnchor.x + dx;
+          let newY = cropAnchor.y + dy;
+
+          // Bound checking
+          newX = Math.max(0, Math.min(100 - cropAnchor.w, newX));
+          newY = Math.max(0, Math.min(100 - cropAnchor.h, newY));
+
+          setCropSelection({
+              ...cropAnchor,
+              x: newX,
+              y: newY
+          });
+
+      } else if (cropAnchor) {
+          // Resize logic
+          let { x, y, w, h } = cropAnchor;
+          
+          if (interactionMode === 'resize-se') {
+              w = clamp(cropAnchor.w + dx);
+              h = clamp(cropAnchor.h + dy);
+          } else if (interactionMode === 'resize-sw') {
+              x = clamp(cropAnchor.x + dx);
+              w = cropAnchor.w - dx;
+              // Prevent flip
+              if (w < 0) { x = x + w; w = Math.abs(w); } 
+          } else if (interactionMode === 'resize-ne') {
+              y = clamp(cropAnchor.y + dy);
+              h = cropAnchor.h - dy;
+              w = clamp(cropAnchor.w + dx);
+               if (h < 0) { y = y + h; h = Math.abs(h); }
+          } else if (interactionMode === 'resize-nw') {
+              x = clamp(cropAnchor.x + dx);
+              y = clamp(cropAnchor.y + dy);
+              w = cropAnchor.w - dx;
+              h = cropAnchor.h - dy;
+               if (w < 0) { x = x + w; w = Math.abs(w); }
+               if (h < 0) { y = y + h; h = Math.abs(h); }
+          }
+
+          setCropSelection({ x, y, w, h });
+      }
+  };
+
+  const handleCropInteractionEnd = () => {
+      setInteractionMode('none');
       setCropStart(null);
+      setCropAnchor(null);
   };
 
   const applyManualCrop = () => {
@@ -837,7 +941,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                 className="relative w-full h-full flex items-center justify-center select-none touch-none"
                 onMouseDown={handleMouseDown}
                 onTouchStart={handleMouseDown}
-                style={{ cursor: isManualCropping ? 'crosshair' : (zoomLevel > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default') }}
+                style={{ 
+                    cursor: isManualCropping 
+                        ? (interactionMode.startsWith('resize') ? `${interactionMode.replace('resize-', '')}-resize` : (interactionMode === 'move' ? 'move' : 'crosshair'))
+                        : (zoomLevel > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default') 
+                }}
             >
                 {/* Wrapper div for Zoom and Pan transform */}
                 <div 
@@ -941,57 +1049,57 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                                     {/* Cutout for selection */}
                                     {cropSelection && cropSelection.w > 0 && (
                                         <div 
-                                            className="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+                                            className="absolute border border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
                                             style={{
                                                 left: `${cropSelection.x}%`,
                                                 top: `${cropSelection.y}%`,
                                                 width: `${cropSelection.w}%`,
                                                 height: `${cropSelection.h}%`,
+                                                pointerEvents: 'auto'
                                             }}
                                         >
                                             {/* Rule of thirds grid */}
-                                            <div className="absolute w-full h-1/3 top-1/3 border-t border-b border-white/30"></div>
-                                            <div className="absolute h-full w-1/3 left-1/3 border-l border-r border-white/30"></div>
+                                            <div className="absolute w-full h-1/3 top-1/3 border-t border-b border-white/30 pointer-events-none"></div>
+                                            <div className="absolute h-full w-1/3 left-1/3 border-l border-r border-white/30 pointer-events-none"></div>
+                                            
+                                            {/* Resize Handles */}
+                                            {/* Top-Left */}
+                                            <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-white border border-slate-400 cursor-nw-resize"></div>
+                                            {/* Top-Right */}
+                                            <div className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-white border border-slate-400 cursor-ne-resize"></div>
+                                            {/* Bottom-Left */}
+                                            <div className="absolute -left-1.5 -bottom-1.5 w-3 h-3 bg-white border border-slate-400 cursor-sw-resize"></div>
+                                            {/* Bottom-Right */}
+                                            <div className="absolute -right-1.5 -bottom-1.5 w-3 h-3 bg-white border border-slate-400 cursor-se-resize"></div>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* AGENT CONFIRMATION DIALOG */}
-                                {cropSelection && cropSelection.w > 5 && cropSelection.h > 5 ? (
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-slate-900/95 backdrop-blur-xl p-6 rounded-2xl border border-cyan-500/50 shadow-2xl flex flex-col items-center animate-fade-in-up min-w-[300px]">
-                                        <div className="text-cyan-400 mb-2">
-                                            <AutoCropIcon className="w-8 h-8" />
-                                        </div>
-                                        <h3 className="text-lg font-bold text-white mb-1">Potvrdit výběr?</h3>
-                                        <p className="text-slate-400 text-sm mb-4 text-center">Jste s tímto výřezem spokojeni?</p>
-                                        <div className="flex space-x-3 w-full">
-                                            <button 
-                                                onClick={() => setCropSelection(null)} 
-                                                className="flex-1 py-2 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                                            >
-                                                Zkusit znovu
-                                            </button>
-                                            <button 
-                                                onClick={applyManualCrop} 
-                                                className="flex-1 py-2 text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 rounded-lg transition-all shadow-lg"
-                                            >
-                                                Ano, oříznout
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    /* INSTRUCTION BANNER */
-                                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-xl border border-slate-700 shadow-2xl animate-fade-in-up">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
-                                            <span className="text-white text-sm font-semibold">Vyberte oblast tažením myši</span>
-                                        </div>
-                                        <div className="h-6 w-px bg-slate-700"></div>
-                                        <button onClick={cancelManualCropMode} className="text-slate-400 hover:text-white text-sm font-medium transition-colors">
-                                            Zrušit
-                                        </button>
-                                    </div>
-                                )}
+                                {/* NEW INSTRUCTION BANNER - Top Center */}
+                                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 shadow-2xl animate-fade-in-up pointer-events-auto">
+                                     <span className="text-slate-200 text-sm font-medium">Tažením myší vyberte oblast ořezu</span>
+                                </div>
+
+                                {/* NEW CONFIRMATION BUTTONS - Bottom Right Corner (Aside) */}
+                                <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 animate-fade-in-up pointer-events-auto">
+                                     <button 
+                                         onClick={cancelManualCropMode} 
+                                         className="flex items-center gap-3 px-5 py-2.5 bg-slate-900/90 text-slate-300 hover:text-white rounded-full shadow-lg border border-slate-700 font-semibold transition-all hover:bg-red-500/20 hover:border-red-500/50"
+                                     >
+                                         <XIcon className="w-5 h-5" />
+                                         <span>Zrušit</span>
+                                     </button>
+                                     <button 
+                                         onClick={applyManualCrop} 
+                                         disabled={!cropSelection || cropSelection.w < 5}
+                                         className={`flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-cyan-500 to-fuchsia-600 text-white rounded-full shadow-lg font-bold transition-all transform hover:scale-105 active:scale-95 aurora-glow ${(!cropSelection || cropSelection.w < 5) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>Oříznout</span>
+                                     </button>
+                                </div>
                             </>
                         )}
                     </div>
@@ -1003,43 +1111,51 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                     )}
                 </div>
 
-                 {/* Zoom Controls */}
-                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md p-2 rounded-full border border-slate-700/50 shadow-xl">
-                     <button onClick={() => handleZoom(-0.5)} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white" title="Oddálit (Šipka dolů)">
-                         <ZoomOutIcon className="w-5 h-5" />
-                     </button>
-                     <span className="text-xs font-mono w-12 text-center text-slate-300 select-none">{Math.round(zoomLevel * 100)}%</span>
-                     <button onClick={() => handleZoom(0.5)} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white" title="Přiblížit (Šipka nahoru)">
-                         <ZoomInIcon className="w-5 h-5" />
-                     </button>
-                     <div className="w-px h-4 bg-slate-700 mx-1"></div>
-                     <button onClick={() => { setZoomLevel(1); setPanPosition({x:0, y:0}); }} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white" title="Resetovat pohled">
-                         <MagnifyingGlassIcon className="w-5 h-5" />
-                     </button>
-                 </div>
-                 
-                 {/* Comparison and View Controls */}
-                 <div className="absolute bottom-4 right-4 flex items-center gap-2 z-30">
-                     {/* Hold to Quick Compare */}
+                 {/* Unified Bottom Toolbar */}
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1.5 bg-slate-950/80 backdrop-blur-xl rounded-2xl border border-slate-800/80 shadow-2xl animate-fade-in-up">
+                    
+                    {/* Zoom Section */}
+                    <div className="flex items-center bg-slate-900/50 rounded-xl px-1 border border-slate-800/50">
+                        <button onClick={() => handleZoom(-0.5)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all" title="Oddálit">
+                            <ZoomOutIcon className="w-5 h-5" />
+                        </button>
+                        <span className="text-xs font-mono font-semibold w-10 text-center text-slate-300 select-none">
+                            {Math.round(zoomLevel * 100)}%
+                        </span>
+                        <button onClick={() => handleZoom(0.5)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all" title="Přiblížit">
+                            <ZoomInIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <button onClick={() => { setZoomLevel(1); setPanPosition({x:0, y:0}); }} className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-xl border border-transparent hover:border-slate-800 transition-all" title="Resetovat pohled">
+                        <MagnifyingGlassIcon className="w-5 h-5" />
+                    </button>
+
+                    <div className="w-px h-6 bg-slate-800 mx-1"></div>
+
+                    {/* Comparison Section */}
                     <button
                         onMouseDown={() => setIsHoldingCompare(true)}
                         onMouseUp={() => setIsHoldingCompare(false)}
                         onMouseLeave={() => setIsHoldingCompare(false)}
                         onTouchStart={() => setIsHoldingCompare(true)}
                         onTouchEnd={() => setIsHoldingCompare(false)}
-                        className="flex items-center justify-center w-10 h-10 bg-slate-900/50 backdrop-blur-md rounded-full border border-slate-700/50 text-slate-200 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/50 transition-all active:scale-95 shadow-lg"
-                        title="Podržte pro zobrazení originálu"
+                        className={`p-2.5 rounded-xl border transition-all ${isHoldingCompare ? 'bg-cyan-500 text-white border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 border-transparent hover:text-cyan-400 hover:bg-slate-900 hover:border-slate-800'}`}
+                        title="Podržte pro originál"
                     >
                         <EyeIcon className="w-5 h-5" />
                     </button>
 
-                    {/* Toggle Slider Mode */}
                     <button 
                         onClick={() => setIsCompareMode(p => !p)}
-                        className={`flex items-center gap-2 px-4 py-2 bg-slate-900/50 backdrop-blur-md rounded-lg border border-slate-700/50 text-sm font-medium select-none transition-colors shadow-lg ${isCompareMode ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'text-slate-200 hover:bg-slate-800/70'}`}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                            isCompareMode 
+                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.15)]' 
+                            : 'text-slate-400 border-transparent hover:bg-slate-900 hover:text-slate-200 hover:border-slate-800'
+                        }`}
                     >
                         <ChevronDoubleLeftIcon className={`w-4 h-4 transition-transform ${isCompareMode ? 'rotate-180' : ''}`} />
-                        <span>{isCompareMode ? 'Skrýt posuvník' : 'Porovnat posuvníkem'}</span>
+                        <span className="hidden sm:inline">Porovnat</span>
                     </button>
                  </div>
 
