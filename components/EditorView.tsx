@@ -81,6 +81,12 @@ const ASPECT_RATIOS = [
     { label: '5:4', value: '5:4' },
 ];
 
+interface LocalHistory {
+    past: ManualEdits[];
+    present: ManualEdits;
+    future: ManualEdits[];
+}
+
 // Main Component
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { files, activeFileId, onSetFiles, onSetActiveFileId, activeAction, addNotification, history, onUndo, onRedo, onNavigate } = props;
@@ -97,7 +103,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [autoCropPrompt, setAutoCropPrompt] = useState(''); // Text prompt for auto crop
   const [styleTransferFile, setStyleTransferFile] = useState<File | null>(null);
   const styleFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Local Manual Edits State & History
   const [manualEdits, setManualEdits] = useState<ManualEdits>(INITIAL_EDITS);
+  const [manualHistory, setManualHistory] = useState<LocalHistory>({
+      past: [],
+      present: INITIAL_EDITS,
+      future: []
+  });
+
   // Shared export options state
   const [exportOptions, setExportOptions] = useState({
         format: 'jpeg',
@@ -137,6 +151,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   // When active file changes, reset the manual edits and clear the live preview.
   useEffect(() => {
       setManualEdits(INITIAL_EDITS);
+      setManualHistory({ past: [], present: INITIAL_EDITS, future: [] });
       setEditedPreviewUrl(null); // Clear manual edit preview
       setIsCompareMode(false); // Exit compare mode when file changes
       setZoomLevel(1); // Reset zoom
@@ -169,8 +184,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         const imageBlob = await applyEditsAndExport(
           activeFile.previewUrl,
           manualEdits,
-          // IMPORTANT: Use scale 1 to ensure what the user sees is high quality (no blur).
-          // Quality 0.85 is a trade-off for speed during preview generation.
           { format: 'jpeg', quality: 85, scale: 1 }
         );
         const objectUrl = URL.createObjectURL(imageBlob);
@@ -188,7 +201,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   
   // Effect to clean up the blob URL when it changes or the component unmounts
   useEffect(() => {
-      // This will store the URL to be cleaned up in the closure.
       const urlToClean = editedPreviewUrl;
       return () => {
           if (urlToClean) {
@@ -197,12 +209,53 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       };
   }, [editedPreviewUrl]);
 
-  // --- Zoom and Pan Logic ---
+  // --- Local History Logic ---
+  const saveManualHistorySnapshot = useCallback(() => {
+      setManualHistory(prev => {
+          // Avoid duplicate history entries
+          if (JSON.stringify(prev.present) === JSON.stringify(manualEdits)) {
+              return prev;
+          }
+          return {
+              past: [...prev.past, prev.present],
+              present: manualEdits,
+              future: []
+          };
+      });
+  }, [manualEdits]);
 
+  const undoManualEdit = useCallback(() => {
+      setManualHistory(prev => {
+          if (prev.past.length === 0) return prev;
+          const newPresent = prev.past[prev.past.length - 1];
+          const newPast = prev.past.slice(0, -1);
+          setManualEdits(newPresent);
+          return {
+              past: newPast,
+              present: newPresent,
+              future: [prev.present, ...prev.future]
+          };
+      });
+  }, []);
+
+  const redoManualEdit = useCallback(() => {
+      setManualHistory(prev => {
+          if (prev.future.length === 0) return prev;
+          const newPresent = prev.future[0];
+          const newFuture = prev.future.slice(1);
+          setManualEdits(newPresent);
+          return {
+              past: [...prev.past, prev.present],
+              present: newPresent,
+              future: newFuture
+          };
+      });
+  }, []);
+
+  // --- Zoom and Pan Logic ---
   const handleZoom = useCallback((delta: number) => {
       setZoomLevel(prev => {
           const newZoom = Math.max(1, Math.min(5, prev + delta));
-          // Reset pan if zooming out to 1
           if (newZoom === 1) {
               setPanPosition({ x: 0, y: 0 });
           }
@@ -211,12 +264,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   }, []);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-      // Disable zoom on scroll if Manual Cropping is active to prevent confusion
       if (isManualCropping) return;
-
-      // Prevent default scrolling behavior when hovering over the image
       e.preventDefault();
-      const delta = e.deltaY * -0.001; // Convert scroll delta to zoom delta
+      const delta = e.deltaY * -0.001;
       handleZoom(delta);
   }, [handleZoom, isManualCropping]);
 
@@ -225,10 +275,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         handleCropInteractionStart(e);
         return;
       }
-
-      if (isDraggingSlider) return; // Let slider logic handle its own drag
-      
-      // Only allow panning if zoomed in
+      if (isDraggingSlider) return; 
       if (zoomLevel > 1) {
           setIsPanning(true);
           const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -242,22 +289,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           handleCropInteractionMove(e);
           return;
       }
-
       if (isPanning) {
           const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
           const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-          
           const deltaX = clientX - lastMousePosition.x;
           const deltaY = clientY - lastMousePosition.y;
-
-          setPanPosition(prev => ({
-              x: prev.x + deltaX,
-              y: prev.y + deltaY
-          }));
-
+          setPanPosition(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
           setLastMousePosition({ x: clientX, y: clientY });
       }
-  }, [isPanning, lastMousePosition, isManualCropping, interactionMode]); // Added interactionMode dependency
+  }, [isPanning, lastMousePosition, isManualCropping, interactionMode]);
 
   const handleMouseUp = useCallback((e: MouseEvent | TouchEvent) => {
       if (isManualCropping) {
@@ -267,7 +307,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       setIsPanning(false);
   }, [isManualCropping]);
 
-  // Add window listeners for mouse move/up to handle dragging outside container
   useEffect(() => {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('touchmove', handleMouseMove);
@@ -281,11 +320,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       };
   }, [handleMouseMove, handleMouseUp]);
 
-  // Keyboard listeners for Zoom (Arrow Keys) as requested
+  // --- Keyboard Logic (Undo/Redo/Zoom) ---
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           if (!activeFile) return;
-          // Only act if not typing in an input
           if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
           if (e.key === 'ArrowUp') {
@@ -294,40 +332,83 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           } else if (e.key === 'ArrowDown') {
               e.preventDefault();
               handleZoom(-0.1);
+          } else if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+              e.preventDefault();
+              if (e.shiftKey) {
+                  // Redo Logic
+                  if (manualHistory.future.length > 0) {
+                      redoManualEdit();
+                  } else {
+                      onRedo();
+                  }
+              } else {
+                  // Undo Logic
+                  // 1. Cancel Crop Mode if active
+                  if (isManualCropping) {
+                      cancelManualCropMode();
+                      return;
+                  }
+                  // 2. Local Manual Edits Undo
+                  if (manualHistory.past.length > 0) {
+                      undoManualEdit();
+                  } else {
+                      // 3. Global Undo Safety Guard
+                      // Check if global undo would empty the file list (return to upload screen)
+                      // If past history exists, check the state of the previous entry
+                      if (history.past.length > 0) {
+                          const previousState = history.past[history.past.length - 1];
+                          if (previousState.state.length === 0) {
+                              addNotification('Nelze vrátit zpět: Toto je počáteční stav projektu.', 'info');
+                          } else {
+                              onUndo();
+                          }
+                      } else {
+                           addNotification('Není co vrátit zpět.', 'info');
+                      }
+                  }
+              }
+          } else if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+              e.preventDefault();
+              if (manualHistory.future.length > 0) {
+                   redoManualEdit();
+              } else {
+                   onRedo();
+              }
           }
       };
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFile, handleZoom]);
+  }, [activeFile, handleZoom, onUndo, onRedo, manualHistory, undoManualEdit, redoManualEdit, isManualCropping, history, addNotification]);
 
 
   // --- Manual Crop Interaction Logic ---
   const startManualCropMode = () => {
       setIsManualCropping(true);
-      setZoomLevel(1); // Reset zoom for easier cropping
+      setZoomLevel(1);
       setPanPosition({x: 0, y: 0});
-      // Don't clear selection if one already exists (from previous edit), just re-enable handles
-      if (!manualEdits.cropRect) {
-         setCropSelection(null);
+      
+      // Snapshot current edits before starting crop flow so we can undo the whole crop operation
+      saveManualHistorySnapshot();
+
+      if (!manualEdits.cropRect && !cropSelection) {
+          setCropSelection({ x: 10, y: 10, w: 80, h: 80 });
+      } else if (!manualEdits.cropRect) {
+          setCropSelection({ x: 10, y: 10, w: 80, h: 80 });
       }
-      addNotification('Režim ořezu aktivní.', 'info');
+      addNotification('Režim ořezu aktivní. Upravte rámeček.', 'info');
   };
 
   const cancelManualCropMode = () => {
       setIsManualCropping(false);
-      // If we had a confirmed edit, keep it visually? No, 'Cancel' means discard changes not yet applied
-      // If there were edits applied, they remain in manualEdits.cropRect
       setCropSelection(null); 
   };
 
-  // Helper to get % coordinates from event
   const getRelativeCoords = (e: MouseEvent | TouchEvent | React.MouseEvent | React.TouchEvent) => {
       if (!imageRef.current) return { x: 0, y: 0 };
       const rect = imageRef.current.getBoundingClientRect();
       const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as any).clientX;
       const clientY = 'touches' in e ? (e as any).touches[0].clientY : (e as any).clientY;
-      
       const x = ((clientX - rect.left) / rect.width) * 100;
       const y = ((clientY - rect.top) / rect.height) * 100;
       return { x, y };
@@ -335,40 +416,21 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const handleCropInteractionStart = (e: React.MouseEvent | React.TouchEvent) => {
       const coords = getRelativeCoords(e);
-      
-      // 1. Hit Test: Check if hitting handles or rect body
       if (cropSelection) {
-          const handleSize = 5; // Threshold in % (rough approx)
-
-          // Helper to check distance to a point
+          const handleSize = 5; 
           const isNear = (px: number, py: number) => Math.abs(px - coords.x) < handleSize && Math.abs(py - coords.y) < handleSize * (imageRef.current!.offsetWidth / imageRef.current!.offsetHeight);
 
-          // Top-Left
-          if (isNear(cropSelection.x, cropSelection.y)) {
-              setInteractionMode('resize-nw');
-          } 
-          // Top-Right
-          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y)) {
-              setInteractionMode('resize-ne');
-          }
-          // Bottom-Left
-          else if (isNear(cropSelection.x, cropSelection.y + cropSelection.h)) {
-              setInteractionMode('resize-sw');
-          }
-          // Bottom-Right
-          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y + cropSelection.h)) {
-              setInteractionMode('resize-se');
-          }
-          // Body (Move)
+          if (isNear(cropSelection.x, cropSelection.y)) setInteractionMode('resize-nw');
+          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y)) setInteractionMode('resize-ne');
+          else if (isNear(cropSelection.x, cropSelection.y + cropSelection.h)) setInteractionMode('resize-sw');
+          else if (isNear(cropSelection.x + cropSelection.w, cropSelection.y + cropSelection.h)) setInteractionMode('resize-se');
           else if (
               coords.x >= cropSelection.x && 
               coords.x <= cropSelection.x + cropSelection.w && 
               coords.y >= cropSelection.y && 
               coords.y <= cropSelection.y + cropSelection.h
-          ) {
-              setInteractionMode('move');
-          } else {
-               // Clicked outside existing rect -> Create new
+          ) setInteractionMode('move');
+          else {
                setInteractionMode('create');
                setCropSelection({ x: coords.x, y: coords.y, w: 0, h: 0 });
           }
@@ -376,61 +438,42 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           setInteractionMode('create');
           setCropSelection({ x: coords.x, y: coords.y, w: 0, h: 0 });
       }
-
       setCropStart(coords);
-      setCropAnchor(cropSelection); // Snapshot current state
+      setCropAnchor(cropSelection);
   };
 
   const handleCropInteractionMove = (e: MouseEvent | TouchEvent) => {
       if (interactionMode === 'none' || !cropStart || !imageRef.current) return;
       const current = getRelativeCoords(e);
-      
-      // Clamp values
       const clamp = (v: number) => Math.max(0, Math.min(100, v));
-      
       const dx = current.x - cropStart.x;
       const dy = current.y - cropStart.y;
 
       if (interactionMode === 'create') {
-          // Create logic
           const startX = cropStart.x;
           const startY = cropStart.y;
           const newX = current.x;
           const newY = current.y;
-
           setCropSelection({
               x: clamp(Math.min(startX, newX)),
               y: clamp(Math.min(startY, newY)),
               w: Math.abs(newX - startX),
               h: Math.abs(newY - startY)
           });
-
       } else if (interactionMode === 'move' && cropAnchor) {
-          // Move logic
           let newX = cropAnchor.x + dx;
           let newY = cropAnchor.y + dy;
-
-          // Bound checking
           newX = Math.max(0, Math.min(100 - cropAnchor.w, newX));
           newY = Math.max(0, Math.min(100 - cropAnchor.h, newY));
-
-          setCropSelection({
-              ...cropAnchor,
-              x: newX,
-              y: newY
-          });
-
+          setCropSelection({ ...cropAnchor, x: newX, y: newY });
       } else if (cropAnchor) {
-          // Resize logic
           let { x, y, w, h } = cropAnchor;
-          
           if (interactionMode === 'resize-se') {
               w = clamp(cropAnchor.w + dx);
               h = clamp(cropAnchor.h + dy);
           } else if (interactionMode === 'resize-sw') {
               x = clamp(cropAnchor.x + dx);
               w = cropAnchor.w - dx;
-              // Prevent flip
               if (w < 0) { x = x + w; w = Math.abs(w); } 
           } else if (interactionMode === 'resize-ne') {
               y = clamp(cropAnchor.y + dy);
@@ -445,7 +488,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                if (w < 0) { x = x + w; w = Math.abs(w); }
                if (h < 0) { y = y + h; h = Math.abs(h); }
           }
-
           setCropSelection({ x, y, w, h });
       }
   };
@@ -461,13 +503,9 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
            addNotification("Vyberte prosím oblast pro oříznutí.", "error");
            return;
       }
-      
-      // Convert percentages to real image pixels
       const img = imageRef.current;
-      // We need the natural dimensions of the underlying image, not displayed dimensions
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
-      
       const cropX = Math.round((cropSelection.x / 100) * naturalWidth);
       const cropY = Math.round((cropSelection.y / 100) * naturalHeight);
       const cropW = Math.round((cropSelection.w / 100) * naturalWidth);
@@ -476,9 +514,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       setManualEdits(prev => ({
           ...prev,
           cropRect: { x: cropX, y: cropY, width: cropW, height: cropH },
-          aspectRatio: undefined // Explicit crop overrides aspect ratio
+          aspectRatio: undefined 
       }));
-      
+      // Save state after crop applied
+      saveManualHistorySnapshot();
+
       setIsManualCropping(false);
       setCropSelection(null);
       addNotification("Oříznutí aplikováno.", "info");
@@ -488,18 +528,11 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   // --- Comparison Slider Drag Logic ---
   const handleSliderMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isDraggingSlider || !imageBoundsRef.current) return;
-
     const rect = imageBoundsRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    
-    // Calculate X relative to the zoomed container width? 
-    // Standard logic works because getBoundingClientRect returns visual size on screen
     const x = clientX - rect.left;
     let newPosition = (x / rect.width) * 100;
-    
-    // Clamp between 0 and 100
     newPosition = Math.max(0, Math.min(100, newPosition));
-
     setCompareSliderPosition(newPosition);
   }, [isDraggingSlider]);
 
@@ -514,7 +547,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           window.addEventListener('mouseup', handleSliderInteractionEnd);
           window.addEventListener('touchend', handleSliderInteractionEnd);
       }
-
       return () => {
           window.removeEventListener('mousemove', handleSliderMove);
           window.removeEventListener('touchmove', handleSliderMove);
@@ -539,22 +571,20 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       try {
           const { file: newFile } = await action();
           const newPreviewUrl = URL.createObjectURL(newFile);
-          
-          // Before updating, clean up the old URL from the main file object
-          URL.revokeObjectURL(activeFile.previewUrl);
+          // NOTE: We do NOT revoke the old URL here anymore.
+          // Revoking it causes history traversal (Undo) to fail because the browser releases the blob.
+          // Memory management is handled by page refresh or when we eventually clear history.
 
           const actionId = `${Date.now()}`;
           updateFile(activeFile.id, {
               file: newFile,
               previewUrl: newPreviewUrl,
-              analysis: undefined // Clear old analysis
+              analysis: undefined 
           }, actionName);
           addNotification(`${actionName} byl úspěšně aplikován.`, 'info');
           setShowFeedback(actionId);
           
-          if (onSuccess) {
-              onSuccess();
-          }
+          if (onSuccess) onSuccess();
       } catch (e) {
           addNotification(getApiErrorMessage(e, `Nepodařilo se aplikovat ${actionName}.`), 'error');
       } finally {
@@ -583,7 +613,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleAutopilot = () => handleAiAction(() => geminiService.autopilotImage(activeFile!.file), 'Autopilot AI');
   const handleRemoveObject = () => handleAiAction(() => geminiService.removeObject(activeFile!.file, removeObjectPrompt), 'Odstranění objektu');
   
-  // Modified Auto Crop to support aspect ratio and optional redirect
   const handleAutoCrop = (shouldRedirectToExport = false) => {
       handleAiAction(
           () => geminiService.autoCrop(activeFile!.file, cropAspectRatio, autoCropPrompt), 
@@ -624,10 +653,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     }, []);
 
     const handleResetEdits = useCallback(() => {
+        saveManualHistorySnapshot(); // Save state before reset
         setManualEdits(INITIAL_EDITS);
-    }, []);
+    }, [saveManualHistorySnapshot]);
     
-    // Handles the confirmation when clicking "Finish & Export" in Manual Edits
     const handleManualExportRequest = useCallback(() => {
         if (window.confirm("Chcete dokončit úpravy a přejít do sekce Export pro uložení fotografie?")) {
             onNavigate({ view: 'editor', action: 'export' });
@@ -639,32 +668,24 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             addNotification('Žádný aktivní obrázek k exportu.', 'error');
             return;
         }
-
         setIsLoading(true);
         setLoadingMessage('Exportuji obrázek...');
-
         try {
-            // Combine AI edits (previewUrl) with Manual Edits
             const imageBlob = await applyEditsAndExport(
                 activeFile.previewUrl,
                 manualEdits,
                 exportOptions
             );
-
             const link = document.createElement('a');
             link.href = URL.createObjectURL(imageBlob);
-            
             const fileExtension = exportOptions.format === 'jpeg' ? 'jpg' : 'png';
             const originalName = activeFile.file.name.replace(/\.[^/.]+$/, '');
             link.download = `${originalName}_artifex.${fileExtension}`;
-            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
             URL.revokeObjectURL(link.href);
             addNotification('Obrázek byl úspěšně stažen.', 'info');
-
         } catch (e) {
             console.error('Download failed', e);
             addNotification(getApiErrorMessage(e, 'Export obrázku se nezdařil.'), 'error');
@@ -672,7 +693,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             setIsLoading(false);
         }
     };
-
 
   useEffect(() => {
     if (activeAction?.action === 'analysis' && activeFile && !activeFile.analysis && !activeFile.isAnalyzing) {
@@ -718,6 +738,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                   onExportOptionsChange={setExportOptions}
                   onRequestExport={handleManualExportRequest}
                   onStartManualCrop={startManualCropMode}
+                  onSnapshot={saveManualHistorySnapshot}
                />;
       case 'autopilot':
          return (
@@ -748,7 +769,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                          <AutoCropIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
                          <h3 className="text-lg font-bold text-slate-100">Chytrý Ořez</h3>
                     </div>
-                    
                     <div>
                         <label className="text-sm font-medium text-slate-300 mb-2 block">Instrukce pro AI (Volitelné)</label>
                         <textarea 
@@ -758,8 +778,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                             placeholder="např. 'Ořízni jen na brankáře', 'Detail míče'..." 
                             className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700 mb-3"
                         ></textarea>
-
-                        <label className="text-sm font-medium text-slate-300 mb-2 block">Formát ořezu</label>
+                        <label className="text-sm font-medium text-slate-300 mb-2 block">Cílový formát (AI)</label>
                         <div className="grid grid-cols-3 gap-2">
                             {ASPECT_RATIOS.map((ratio) => (
                                 <button
@@ -776,7 +795,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                             ))}
                         </div>
                     </div>
-
                     <div className="space-y-2 pt-2">
                         <button onClick={() => handleAutoCrop(false)} disabled={isLoading} className="w-full inline-flex items-center justify-center px-4 py-2 border border-slate-600 text-sm font-medium rounded-md shadow-sm text-slate-200 bg-slate-800 hover:bg-slate-700 disabled:opacity-50">
                             {isLoading ? 'Ořezávám...' : 'Pouze Oříznout'}
@@ -1077,28 +1095,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
                                 {/* NEW INSTRUCTION BANNER - Top Center */}
                                 <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 shadow-2xl animate-fade-in-up pointer-events-auto">
-                                     <span className="text-slate-200 text-sm font-medium">Tažením myší vyberte oblast ořezu</span>
-                                </div>
-
-                                {/* NEW CONFIRMATION BUTTONS - Bottom Right Corner (Aside) */}
-                                <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-3 animate-fade-in-up pointer-events-auto">
-                                     <button 
-                                         onClick={cancelManualCropMode} 
-                                         className="flex items-center gap-3 px-5 py-2.5 bg-slate-900/90 text-slate-300 hover:text-white rounded-full shadow-lg border border-slate-700 font-semibold transition-all hover:bg-red-500/20 hover:border-red-500/50"
-                                     >
-                                         <XIcon className="w-5 h-5" />
-                                         <span>Zrušit</span>
-                                     </button>
-                                     <button 
-                                         onClick={applyManualCrop} 
-                                         disabled={!cropSelection || cropSelection.w < 5}
-                                         className={`flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-cyan-500 to-fuchsia-600 text-white rounded-full shadow-lg font-bold transition-all transform hover:scale-105 active:scale-95 aurora-glow ${(!cropSelection || cropSelection.w < 5) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                                        </svg>
-                                        <span>Oříznout</span>
-                                     </button>
+                                     <span className="text-slate-200 text-sm font-medium">Tažením a úpravou rohů vyberte oblast</span>
                                 </div>
                             </>
                         )}
@@ -1111,7 +1108,28 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                     )}
                 </div>
 
-                 {/* Unified Bottom Toolbar */}
+                 {/* Unified Bottom Toolbar - Swaps between Standard and Crop Mode */}
+                 {isManualCropping ? (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 animate-fade-in-up">
+                         <button 
+                             onClick={cancelManualCropMode} 
+                             className="flex items-center justify-center gap-2 w-32 px-4 py-3 bg-slate-900/90 backdrop-blur-xl text-slate-300 hover:text-white rounded-2xl shadow-lg border border-slate-700/50 font-semibold transition-all hover:bg-red-500/20 hover:border-red-500/50"
+                         >
+                             <XIcon className="w-5 h-5" />
+                             <span>Zrušit</span>
+                         </button>
+                         <button 
+                             onClick={applyManualCrop} 
+                             disabled={!cropSelection || cropSelection.w < 5}
+                             className={`flex items-center justify-center gap-2 w-32 px-4 py-3 bg-gradient-to-r from-cyan-500 to-fuchsia-600 text-white rounded-2xl shadow-lg font-bold transition-all transform hover:scale-105 active:scale-95 aurora-glow border border-white/10 ${(!cropSelection || cropSelection.w < 5) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                         >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                            </svg>
+                            <span>Oříznout</span>
+                         </button>
+                    </div>
+                 ) : (
                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1.5 bg-slate-950/80 backdrop-blur-xl rounded-2xl border border-slate-800/80 shadow-2xl animate-fade-in-up">
                     
                     {/* Zoom Section */}
@@ -1158,6 +1176,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                         <span className="hidden sm:inline">Porovnat</span>
                     </button>
                  </div>
+                 )}
 
                  {showFeedback && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 animate-fade-in-slide-up">
@@ -1167,8 +1186,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
             </div>
           )}
            <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
-                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><UndoIcon className="w-5 h-5" /></button>
-                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700"><RedoIcon className="w-5 h-5" /></button>
+                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700" title="Zpět (Ctrl+Z)"><UndoIcon className="w-5 h-5" /></button>
+                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700" title="Vpřed (Ctrl+Y)"><RedoIcon className="w-5 h-5" /></button>
             </div>
         </div>
 

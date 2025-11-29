@@ -202,7 +202,7 @@ function App() {
         if (updatedFilesMap.has(cf.id)) {
           const newFile = updatedFilesMap.get(cf.id)!;
           // Clean up old object URL
-          URL.revokeObjectURL(cf.previewUrl);
+          // NOTE: Do not revoke here to support history undo
           return { ...cf, file: newFile.file, previewUrl: URL.createObjectURL(newFile.file) };
         }
         return cf;

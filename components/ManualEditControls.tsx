@@ -10,9 +10,10 @@ interface SliderProps {
   max?: number;
   step?: number;
   onChange: (value: number) => void;
+  onAfterChange: () => void; // Triggered on mouse up / touch end
 }
 
-const Slider: React.FC<SliderProps> = ({ label, value, min = -100, max = 100, step = 1, onChange }) => (
+const Slider: React.FC<SliderProps> = ({ label, value, min = -100, max = 100, step = 1, onChange, onAfterChange }) => (
   <div className="space-y-2">
     <div className="flex justify-between items-center">
       <label className="text-sm font-medium text-slate-300">{label}</label>
@@ -25,6 +26,9 @@ const Slider: React.FC<SliderProps> = ({ label, value, min = -100, max = 100, st
       step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
+      onMouseUp={onAfterChange}
+      onTouchEnd={onAfterChange}
+      onKeyUp={onAfterChange}
       className="custom-slider"
     />
   </div>
@@ -38,6 +42,7 @@ interface ManualEditControlsProps {
   onExportOptionsChange: (options: { format: string; quality: number; scale: number }) => void;
   onRequestExport: () => void;
   onStartManualCrop: () => void; // Trigger for classic crop
+  onSnapshot: () => void; // Request to save current state to history
 }
 
 const ASPECT_RATIOS = [
@@ -55,8 +60,15 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
     exportOptions,
     onExportOptionsChange,
     onRequestExport,
-    onStartManualCrop
+    onStartManualCrop,
+    onSnapshot
 }) => {
+
+  // Wrapper to handle edit change but NOT trigger snapshot yet
+  const handleChange = <K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
+      onEditChange(key, value);
+  };
+
   return (
     <div className="p-4 space-y-5 animate-fade-in-right pb-20"> {/* Extra padding bottom for export button */}
       <div className="flex justify-between items-center">
@@ -84,7 +96,7 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
                 {ASPECT_RATIOS.map((ratio) => (
                     <button
                         key={ratio.label}
-                        onClick={() => onEditChange('aspectRatio', ratio.value)}
+                        onClick={() => { handleChange('aspectRatio', ratio.value); onSnapshot(); }}
                         className={`px-1 py-1.5 text-[10px] font-medium rounded border transition-all ${
                             edits.aspectRatio === ratio.value
                                 ? 'bg-cyan-500/20 border-cyan-500 text-white'
@@ -98,15 +110,15 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
           </div>
       </div>
 
-      <Slider label="Jas" value={edits.brightness} onChange={(v) => onEditChange('brightness', v)} />
-      <Slider label="Kontrast" value={edits.contrast} onChange={(v) => onEditChange('contrast', v)} />
-      <Slider label="Sytost" value={edits.saturation} onChange={(v) => onEditChange('saturation', v)} />
-      <Slider label="Živost" value={edits.vibrance} onChange={(v) => onEditChange('vibrance', v)} />
-      <Slider label="Stíny" value={edits.shadows} onChange={(v) => onEditChange('shadows', v)} />
-      <Slider label="Světlé tóny" value={edits.highlights} onChange={(v) => onEditChange('highlights', v)} />
-      <Slider label="Zřetelnost" value={edits.clarity} min={0} onChange={(v) => onEditChange('clarity', v)} />
-      <Slider label="Ostrost" value={edits.sharpness} min={0} onChange={(v) => onEditChange('sharpness', v)} />
-      <Slider label="Redukce šumu" value={edits.noiseReduction} min={0} onChange={(v) => onEditChange('noiseReduction', v)} />
+      <Slider label="Jas" value={edits.brightness} onChange={(v) => handleChange('brightness', v)} onAfterChange={onSnapshot} />
+      <Slider label="Kontrast" value={edits.contrast} onChange={(v) => handleChange('contrast', v)} onAfterChange={onSnapshot} />
+      <Slider label="Sytost" value={edits.saturation} onChange={(v) => handleChange('saturation', v)} onAfterChange={onSnapshot} />
+      <Slider label="Živost" value={edits.vibrance} onChange={(v) => handleChange('vibrance', v)} onAfterChange={onSnapshot} />
+      <Slider label="Stíny" value={edits.shadows} onChange={(v) => handleChange('shadows', v)} onAfterChange={onSnapshot} />
+      <Slider label="Světlé tóny" value={edits.highlights} onChange={(v) => handleChange('highlights', v)} onAfterChange={onSnapshot} />
+      <Slider label="Zřetelnost" value={edits.clarity} min={0} onChange={(v) => handleChange('clarity', v)} onAfterChange={onSnapshot} />
+      <Slider label="Ostrost" value={edits.sharpness} min={0} onChange={(v) => handleChange('sharpness', v)} onAfterChange={onSnapshot} />
+      <Slider label="Redukce šumu" value={edits.noiseReduction} min={0} onChange={(v) => handleChange('noiseReduction', v)} onAfterChange={onSnapshot} />
 
       <hr className="border-slate-700/50 my-4" />
 

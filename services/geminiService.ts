@@ -139,28 +139,36 @@ export const removeObject = async (file: File, objectToRemove: string): Promise<
  * Automatically crops an image to improve composition with support for specific aspect ratios and user instructions.
  */
 export const autoCrop = async (file: File, aspectRatio: string = 'Original', instruction: string = ''): Promise<{ file: File }> => {
-    const ratioInstruction = aspectRatio !== 'Original' 
-        ? `The output image MUST STRICTLY follow the ${aspectRatio} aspect ratio.` 
-        : 'Maintain the most aesthetically pleasing aspect ratio for the subject.';
+    
+    // Translate shorthand ratios to explicit geometric instructions
+    const ratioMap: Record<string, string> = {
+        '1:1': 'SQUARE aspect ratio (1:1). Width MUST EQUAL Height.',
+        '16:9': 'LANDSCAPE aspect ratio (16:9). Width must be ~1.77x the Height.',
+        '4:3': 'STANDARD aspect ratio (4:3). Width must be ~1.33x the Height.',
+        '9:16': 'PORTRAIT/STORY aspect ratio (9:16). Height must be ~1.77x the Width.',
+        '5:4': 'PORTRAIT aspect ratio (5:4). Height must be ~1.25x the Width.',
+        'Original': 'ORIGINAL aspect ratio, but ZOOMED IN.'
+    };
 
-    const customInstruction = instruction.trim() 
-        ? `USER INSTRUCTION: "${instruction}". Priority: Highest. Crop specifically to fulfill this request.`
-        : `Focus on Impact: Identify the primary subject or action.`;
+    const ratioDescription = ratioMap[aspectRatio] || aspectRatio;
 
     const prompt = `
-        Act as a world-class photo editor. Your task is to CROP this image.
+        ROLE: Professional Photo Editor.
+        TASK: CROP this image.
 
-        Aspect Ratio Requirement: ${ratioInstruction}
-        
-        ${customInstruction}
+        TARGET FORMAT: ${aspectRatio} (${ratioDescription})
 
-        **EXECUTION GUIDELINES:**
-        1. **Zoom on Action (Sports/Active):** If this is a sports or action shot, ZOOM IN AGGRESSIVELY. Remove dead space around the players. We want to see the emotion and the immediate action.
-        2. **Remove Distractions:** Cut out empty sky, grass, or irrelevant background elements that do not add to the story.
-        3. **Fill the Frame:** Do not leave black bars. The image content must fill the requested aspect ratio.
-        4. **No Distortion:** Do not stretch the image. Resample/Crop pixels to fit.
+        MANDATORY EXECUTION RULES:
+        1. **DELETE PIXELS**: You must physically remove pixels from the edges. The output image resolution MUST be smaller than the input.
+        2. **NO BORDERS**: Do NOT add black bars (letterboxing). Fill the entire canvas with the image subject.
+        3. **STRICT RATIO**: The output image dimensions must mathematically match the ${aspectRatio} ratio.
+        4. **ZOOM**: Locate the main subject (person, object, action). CROP IN TIGHTLY on them. Remove distracting background edges.
         
-        Return the cropped image.
+        ${instruction ? `USER INSTRUCTION: "${instruction}"` : 'If no specific subject is clear, crop 20% from the edges to center the attention.'}
+
+        ${aspectRatio === 'Original' ? 'Even if the ratio is "Original", you MUST perform a crop. Remove at least 15% of the image area from the edges to tighten the composition.' : ''}
+        
+        OUTPUT: The cropped image only.
     `;
     return editImageWithPrompt(file, prompt);
 };
@@ -214,34 +222,17 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
  */
 export const generateImage = async (prompt: string): Promise<string> => {
   const ai = getGenAI();
-  
-  // Enhanced prompt to ensure the model interprets it as a generation task and not a text completion task
-  const enhancedPrompt = `Generate a high-quality, photorealistic image matching this description: ${prompt}`;
-
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-image-preview',
-    contents: {
-        parts: [
-            { text: enhancedPrompt }
-        ]
-    },
+    contents: prompt,
     config: {
-      imageConfig: {
-          aspectRatio: '1:1',
-          imageSize: '1K', // Standard 1K resolution
-      }
+       // No mimeType or schema for image generation models
     },
   });
 
   const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-  
-  if (!imagePart || !imagePart.inlineData || !imagePart.inlineData.data) {
-    // Check if the model refused and returned text
-    const textPart = response.candidates?.[0]?.content?.parts?.find(part => part.text);
-    if (textPart?.text) {
-         throw new Error(`Generování se nezdařilo: ${textPart.text}`);
-    }
-    throw new Error('Generování obrázku selhalo, nebyla vrácena žádná data.');
+  if (!imagePart || !imagePart.inlineData) {
+    throw new Error('No image was generated.');
   }
 
   return imagePart.inlineData.data;
