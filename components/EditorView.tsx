@@ -1179,7 +1179,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                  )}
 
                  {showFeedback && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 animate-fade-in-slide-up">
+                    <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-50 animate-fade-in-slide-up">
                         <FeedbackButtons onFeedback={(f) => handleFeedback(showFeedback, f)} onTimeout={() => setShowFeedback(null)} />
                     </div>
                  )}
