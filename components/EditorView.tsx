@@ -5,27 +5,22 @@ import ManualEditControls from './ManualEditControls';
 import FeedbackButtons from './FeedbackButtons';
 import { 
     UndoIcon, 
-    RedoIcon, 
     EyeIcon, 
     UploadIcon, 
     AutopilotIcon, 
     ArrowPathIcon,
-    AutoCropIcon,
-    BackgroundReplacementIcon,
-    StyleTransferIcon,
-    HistoryIcon,
-    PresetIcon,
-    ExportIcon,
-    ChevronDoubleLeftIcon,
     ZoomInIcon,
     ZoomOutIcon,
     MagnifyingGlassIcon,
-    XIcon
+    XIcon,
+    SparklesIcon,
+    FilmIcon
 } from './icons';
-import type { UploadedFile, AnalysisResult, EditorAction, History, Preset, ProactiveSuggestion, Feedback, ManualEdits, View } from '../types';
+import type { UploadedFile, EditorAction, History, Preset, ManualEdits, View } from '../types';
 import * as geminiService from '../services/geminiService';
 import { recordExplicitFeedback } from '../services/userProfileService';
 import { applyEditsAndExport } from '../utils/imageProcessor';
+import { useTranslation } from '../contexts/LanguageContext';
 
 // Props Interface
 interface EditorViewProps {
@@ -48,10 +43,10 @@ interface EditorViewProps {
   onToggleSidebar: () => void;
 }
 
-const getApiErrorMessage = (error: unknown, defaultMessage = 'Došlo k neznámé chybě.'): string => {
+const getApiErrorMessage = (error: unknown, defaultMessage = 'An error occurred.'): string => {
     if (error instanceof Error) {
         if (error.message.toLowerCase().includes('api key') || error.message.toLowerCase().includes('auth')) {
-            return 'API klíč není platný nebo chybí. Zkuste prosím vybrat jiný.';
+            return 'API Key Error.';
         }
         return error.message;
     }
@@ -72,15 +67,6 @@ const INITIAL_EDITS: ManualEdits = {
   cropRect: undefined, 
 };
 
-const ASPECT_RATIOS = [
-    { label: 'Originál', value: 'Original' },
-    { label: '1:1', value: '1:1' },
-    { label: '16:9', value: '16:9' },
-    { label: '4:3', value: '4:3' },
-    { label: '9:16', value: '9:16' },
-    { label: '5:4', value: '5:4' },
-];
-
 interface LocalHistory {
     past: ManualEdits[];
     present: ManualEdits;
@@ -90,11 +76,11 @@ interface LocalHistory {
 // Main Component
 const EditorView: React.FC<EditorViewProps> = (props) => {
   const { files, activeFileId, onSetFiles, onSetActiveFileId, activeAction, addNotification, history, onUndo, onRedo, onNavigate } = props;
+  const { t, language } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [editedPreviewUrl, setEditedPreviewUrl] = useState<string | null>(null);
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
   // State for specific tool inputs
   const [removeObjectPrompt, setRemoveObjectPrompt] = useState('');
@@ -102,6 +88,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const [cropAspectRatio, setCropAspectRatio] = useState('Original');
   const [autoCropPrompt, setAutoCropPrompt] = useState(''); // Text prompt for auto crop
   const [styleTransferFile, setStyleTransferFile] = useState<File | null>(null);
+  const [videoPrompt, setVideoPrompt] = useState('');
   const styleFileInputRef = useRef<HTMLInputElement>(null);
   
   // Local Manual Edits State & History
@@ -120,7 +107,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
     });
   // State for comparison slider
   const [isCompareMode, setIsCompareMode] = useState(false);
-  const [isHoldingCompare, setIsHoldingCompare] = useState(false); // New state for quick peek
+  const [isHoldingCompare, setIsHoldingCompare] = useState(false);
   const [compareSliderPosition, setCompareSliderPosition] = useState(50); // Percentage
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const imageBoundsRef = useRef<HTMLDivElement>(null);
@@ -174,8 +161,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       return;
     }
 
-    setIsGeneratingPreview(true);
-    
     // Debounce to avoid lagging UI
     const handler = setTimeout(async () => {
       if (!activeFile) return;
@@ -190,14 +175,12 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         setEditedPreviewUrl(objectUrl);
       } catch (e) {
         console.error("Failed to generate live preview", e);
-        addNotification('Náhled úprav se nepodařilo vygenerovat.', 'error');
-      } finally {
-        setIsGeneratingPreview(false);
+        addNotification(t.msg_error, 'error');
       }
     }, 250); 
 
     return () => clearTimeout(handler);
-  }, [activeFile, manualEdits, addNotification]); // Intentionally excluding editedPreviewUrl to avoid loops
+  }, [activeFile, manualEdits, addNotification, t.msg_error]); 
   
   // Effect to clean up the blob URL when it changes or the component unmounts
   useEffect(() => {
@@ -278,8 +261,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       if (isDraggingSlider) return; 
       if (zoomLevel > 1) {
           setIsPanning(true);
-          const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-          const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+          const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as any).clientX;
+          const clientY = 'touches' in e ? (e as any).touches[0].clientY : (e as any).clientY;
           setLastMousePosition({ x: clientX, y: clientY });
       }
   };
@@ -290,8 +273,8 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
           return;
       }
       if (isPanning) {
-          const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-          const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+          const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as any).clientX;
+          const clientY = 'touches' in e ? (e as any).touches[0].clientY : (e as any).clientY;
           const deltaX = clientX - lastMousePosition.x;
           const deltaY = clientY - lastMousePosition.y;
           setPanPosition(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
@@ -353,17 +336,15 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                       undoManualEdit();
                   } else {
                       // 3. Global Undo Safety Guard
-                      // Check if global undo would empty the file list (return to upload screen)
-                      // If past history exists, check the state of the previous entry
                       if (history.past.length > 0) {
                           const previousState = history.past[history.past.length - 1];
                           if (previousState.state.length === 0) {
-                              addNotification('Nelze vrátit zpět: Toto je počáteční stav projektu.', 'info');
+                              addNotification(t.msg_error, 'info'); // Simplified msg
                           } else {
                               onUndo();
                           }
                       } else {
-                           addNotification('Není co vrátit zpět.', 'info');
+                           addNotification(t.msg_error, 'info');
                       }
                   }
               }
@@ -379,7 +360,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFile, handleZoom, onUndo, onRedo, manualHistory, undoManualEdit, redoManualEdit, isManualCropping, history, addNotification]);
+  }, [activeFile, handleZoom, onUndo, onRedo, manualHistory, undoManualEdit, redoManualEdit, isManualCropping, history, addNotification, t.msg_error]);
 
 
   // --- Manual Crop Interaction Logic ---
@@ -396,7 +377,6 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
       } else if (!manualEdits.cropRect) {
           setCropSelection({ x: 10, y: 10, w: 80, h: 80 });
       }
-      addNotification('Režim ořezu aktivní. Upravte rámeček.', 'info');
   };
 
   const cancelManualCropMode = () => {
@@ -500,7 +480,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   const applyManualCrop = () => {
       if (!cropSelection || !imageRef.current || cropSelection.w < 1 || cropSelection.h < 1) {
-           addNotification("Vyberte prosím oblast pro oříznutí.", "error");
+           addNotification(t.msg_error, "error");
            return;
       }
       const img = imageRef.current;
@@ -521,7 +501,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
       setIsManualCropping(false);
       setCropSelection(null);
-      addNotification("Oříznutí aplikováno.", "info");
+      addNotification(t.msg_success, "info");
   };
 
 
@@ -529,7 +509,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleSliderMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isDraggingSlider || !imageBoundsRef.current) return;
     const rect = imageBoundsRef.current.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientX = 'touches' in e ? (e as any).touches[0].clientX : (e as any).clientX;
     const x = clientX - rect.left;
     let newPosition = (x / rect.width) * 100;
     newPosition = Math.max(0, Math.min(100, newPosition));
@@ -566,643 +546,793 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   const handleAiAction = useCallback(async (action: () => Promise<{ file: File }>, actionName: string, onSuccess?: () => void) => {
       if (!activeFile) return;
       setIsLoading(true);
-      setLoadingMessage(`Aplikuji ${actionName}...`);
+      setLoadingMessage(t.editor_analyzing);
       setShowFeedback(null);
       try {
           const { file: newFile } = await action();
           const newPreviewUrl = URL.createObjectURL(newFile);
-          // NOTE: We do NOT revoke the old URL here anymore.
-          // Revoking it causes history traversal (Undo) to fail because the browser releases the blob.
-          // Memory management is handled by page refresh or when we eventually clear history.
-
+          
           const actionId = `${Date.now()}`;
           updateFile(activeFile.id, {
               file: newFile,
               previewUrl: newPreviewUrl,
               analysis: undefined 
           }, actionName);
-          addNotification(`${actionName} byl úspěšně aplikován.`, 'info');
+          addNotification(t.msg_success, 'info');
           setShowFeedback(actionId);
           
           if (onSuccess) onSuccess();
       } catch (e) {
-          addNotification(getApiErrorMessage(e, `Nepodařilo se aplikovat ${actionName}.`), 'error');
+          addNotification(getApiErrorMessage(e, t.msg_error), 'error');
       } finally {
           setIsLoading(false);
       }
-  }, [activeFile, addNotification, updateFile]);
+  }, [activeFile, addNotification, updateFile, t.editor_analyzing, t.msg_success, t.msg_error]);
 
   // --- Handlers for specific AI actions ---
   const handleAnalyze = useCallback(async () => {
     if (!activeFile) return;
     setIsLoading(true);
-    setLoadingMessage('Analyzuji obrázek...');
+    setLoadingMessage(t.editor_analyzing);
     updateFile(activeFile.id, { isAnalyzing: true, analysis: undefined }, 'Start Analysis');
     try {
-      const result = await geminiService.analyzeImage(activeFile.file);
-      updateFile(activeFile.id, { analysis: result, isAnalyzing: false }, 'Analysis Complete');
-      addNotification('Analýza obrázku dokončena.', 'info');
+      // Pass the current language to the API service
+      const result = await geminiService.analyzeImage(activeFile.file, language);
+      updateFile(activeFile.id, { isAnalyzing: false, analysis: result }, 'Analysis Completed');
     } catch (e) {
-      addNotification(getApiErrorMessage(e, 'Analýza selhala.'), 'error');
       updateFile(activeFile.id, { isAnalyzing: false }, 'Analysis Failed');
+      addNotification(getApiErrorMessage(e, t.msg_error), 'error');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-  }, [activeFile, addNotification, updateFile]);
+  }, [activeFile, updateFile, addNotification, language, t.editor_analyzing, t.msg_error]);
 
-  const handleAutopilot = () => handleAiAction(() => geminiService.autopilotImage(activeFile!.file), 'Autopilot AI');
-  const handleRemoveObject = () => handleAiAction(() => geminiService.removeObject(activeFile!.file, removeObjectPrompt), 'Odstranění objektu');
-  
-  const handleAutoCrop = (shouldRedirectToExport = false) => {
+  const handleAutopilot = () => {
+    handleAiAction(() => geminiService.autopilotImage(activeFile!.file), 'Autopilot Enhancement');
+  };
+
+  const handleRemoveObject = () => {
+    if (!removeObjectPrompt) {
+        addNotification('Prosím popište objekt k odstranění.', 'error');
+        return;
+    }
+    handleAiAction(
+        () => geminiService.removeObject(activeFile!.file, removeObjectPrompt), 
+        `Remove: ${removeObjectPrompt}`,
+        () => setRemoveObjectPrompt('')
+    );
+  };
+
+  const handleReplaceBackground = () => {
+    if (!replaceBgPrompt) {
+        addNotification('Prosím popište nové pozadí.', 'error');
+        return;
+    }
+    handleAiAction(
+        () => geminiService.replaceBackground(activeFile!.file, replaceBgPrompt), 
+        `BG Replace: ${replaceBgPrompt}`,
+        () => setReplaceBgPrompt('')
+    );
+  };
+
+  const handleAutoCrop = () => {
+    handleAiAction(
+        () => geminiService.autoCrop(activeFile!.file, cropAspectRatio, autoCropPrompt),
+        `Auto Crop: ${cropAspectRatio}`,
+        () => {
+             // Reset form but stay on tool
+        }
+    );
+  };
+
+  const handleStyleTransfer = () => {
+      if (!styleTransferFile) {
+          addNotification('Prosím vyberte obrázek stylu.', 'error');
+          return;
+      }
       handleAiAction(
-          () => geminiService.autoCrop(activeFile!.file, cropAspectRatio, autoCropPrompt), 
-          'Automatické oříznutí',
-          () => {
-              if (shouldRedirectToExport) {
-                  onNavigate({ view: 'editor', action: 'export' });
-              }
-          }
+          () => geminiService.styleTransfer(activeFile!.file, styleTransferFile),
+          'Style Transfer',
+          () => setStyleTransferFile(null)
       );
   };
   
-  const handleReplaceBg = () => handleAiAction(() => geminiService.replaceBackground(activeFile!.file, replaceBgPrompt), 'Výměna pozadí');
-  const handleStyleTransfer = () => {
-    if (!styleTransferFile) {
-        addNotification("Vyberte prosím obrázek stylu.", "error");
-        return;
-    }
-    handleAiAction(() => geminiService.styleTransfer(activeFile!.file, styleTransferFile), 'Přenos stylu');
-  };
-
-  const handleFeedback = (actionId: string, feedback: Feedback) => {
-    recordExplicitFeedback(actionId, feedback);
-    addNotification('Děkujeme za zpětnou vazbu!', 'info');
-  };
-
-  const handleProactiveSuggestion = (suggestion: ProactiveSuggestion) => {
-      if (suggestion.action === 'auto-crop') {
-          onNavigate({ view: 'editor', action: 'auto-crop' });
-      } else if (suggestion.action === 'remove-object') {
-          onNavigate({ view: 'editor', action: 'remove-object' });
-          addNotification('Nástroj pro odstranění objektu je připraven.', 'info');
-      }
-  };
-
-    const handleEditChange = useCallback(<K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
-        setManualEdits(prev => ({ ...prev, [key]: value }));
-    }, []);
-
-    const handleResetEdits = useCallback(() => {
-        saveManualHistorySnapshot(); // Save state before reset
-        setManualEdits(INITIAL_EDITS);
-    }, [saveManualHistorySnapshot]);
-    
-    const handleManualExportRequest = useCallback(() => {
-        if (window.confirm("Chcete dokončit úpravy a přejít do sekce Export pro uložení fotografie?")) {
-            onNavigate({ view: 'editor', action: 'export' });
-        }
-    }, [onNavigate]);
-
-    const handleDownload = async () => {
-        if (!activeFile) {
-            addNotification('Žádný aktivní obrázek k exportu.', 'error');
-            return;
-        }
+  const handleGenerateSocial = async () => {
+        if (!activeFile) return;
         setIsLoading(true);
-        setLoadingMessage('Exportuji obrázek...');
+        setLoadingMessage(t.editor_analyzing);
         try {
-            const imageBlob = await applyEditsAndExport(
-                activeFile.previewUrl,
-                manualEdits,
-                exportOptions
-            );
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(imageBlob);
-            const fileExtension = exportOptions.format === 'jpeg' ? 'jpg' : 'png';
-            const originalName = activeFile.file.name.replace(/\.[^/.]+$/, '');
-            link.download = `${originalName}_artifex.${fileExtension}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-            addNotification('Obrázek byl úspěšně stažen.', 'info');
+            const content = await geminiService.generateSocialContent(activeFile.file, language);
+            updateFile(activeFile.id, { socialContent: content }, 'Generated Social Content');
+            addNotification(t.msg_success, 'info');
         } catch (e) {
-            console.error('Download failed', e);
-            addNotification(getApiErrorMessage(e, 'Export obrázku se nezdařil.'), 'error');
+             addNotification(getApiErrorMessage(e, t.msg_error), 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
-  useEffect(() => {
-    if (activeAction?.action === 'analysis' && activeFile && !activeFile.analysis && !activeFile.isAnalyzing) {
-        handleAnalyze();
-    }
-  }, [activeAction, activeFile, handleAnalyze]);
+    const handleGenerateVideo = async () => {
+        if (!activeFile) return;
+        setIsLoading(true);
+        setLoadingMessage('Generování videa (To může chvíli trvat)...');
+        try {
+            const videoUrl = await geminiService.generateVideoFromImage(activeFile.file, videoPrompt);
+            updateFile(activeFile.id, { generatedVideo: { url: videoUrl, expiry: Date.now() + 3600000 } }, 'Video Generated');
+            addNotification(t.msg_success, 'info');
+        } catch (e) {
+             addNotification(getApiErrorMessage(e, t.msg_error), 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
 
-  // RENDER LOGIC
-  const renderActionPanel = () => {
-    if (!activeFile) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 p-8">
-            <UploadIcon className="w-16 h-16 mb-4" />
-            <h2 className="text-xl font-bold text-slate-300">Žádný vybraný obrázek</h2>
-            <p>Nahrajte nebo vyberte obrázek pro zahájení úprav.</p>
-        </div>
-      );
-    }
-
-    switch (activeAction?.action) {
-      case 'analysis':
-        return (
-          <div className="p-4 space-y-4 animate-fade-in-right">
-            <h3 className="text-lg font-bold text-slate-100">AI Analýza</h3>
-            {activeFile.isAnalyzing && <div className="flex items-center space-x-2 text-slate-400"><ArrowPathIcon className="w-5 h-5 animate-spin" /><span>Analyzuji...</span></div>}
-            {activeFile.analysis && (
-              <div className="space-y-4 text-sm">
-                <div><h4 className="font-semibold text-slate-300 mb-1">Popis</h4><p className="text-slate-400">{activeFile.analysis.description}</p></div>
-                <div><h4 className="font-semibold text-slate-300 mb-1">Návrhy na vylepšení</h4><ul className="list-disc list-inside text-slate-400 space-y-1">{activeFile.analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
-                {activeFile.analysis.proactiveSuggestions && <div><h4 className="font-semibold text-slate-300 mb-1">Proaktivní návrhy</h4><div className="flex flex-col gap-2">{activeFile.analysis.proactiveSuggestions.map((s, i) => (<button key={i} onClick={() => handleProactiveSuggestion(s)} className="text-left text-cyan-400 hover:underline">{s.text}</button>))}</div></div>}
-                <div><h4 className="font-semibold text-slate-300 mb-1">Technické informace</h4><p className="text-slate-400 font-mono text-xs">ISO: {activeFile.analysis.technicalInfo.ISO}, Clona: {activeFile.analysis.technicalInfo.Aperture}, Závěrka: {activeFile.analysis.technicalInfo.ShutterSpeed}</p></div>
-              </div>
-            )}
-          </div>
-        );
-      case 'manual-edit':
-        return <ManualEditControls 
-                  edits={manualEdits} 
-                  onEditChange={handleEditChange} 
-                  onReset={handleResetEdits}
-                  exportOptions={exportOptions}
-                  onExportOptionsChange={setExportOptions}
-                  onRequestExport={handleManualExportRequest}
-                  onStartManualCrop={startManualCropMode}
-                  onSnapshot={saveManualHistorySnapshot}
-               />;
-      case 'autopilot':
-         return (
-            <div className="p-4 space-y-4 text-center animate-fade-in-right">
-                <AutopilotIcon className="w-16 h-16 mx-auto text-cyan-400"/>
-                <h3 className="text-lg font-bold text-slate-100">Autopilot AI</h3>
-                <p className="text-sm text-slate-400">Nechte AI automaticky vylepšit váš obrázek jedním kliknutím. Zachová původní strukturu a zaměří se na barvy a světlo.</p>
-                <button onClick={handleAutopilot} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                    {isLoading ? 'Pracuji...' : 'Spustit Autopilot'}
-                </button>
-            </div>
-         );
-      case 'remove-object':
-        return (
-            <div className="p-4 space-y-4 animate-fade-in-right">
-                <h3 className="text-lg font-bold text-slate-100">Odstranit objekt</h3>
-                <p className="text-sm text-slate-400">Popište objekt, který chcete z obrázku odstranit.</p>
-                <textarea value={removeObjectPrompt} onChange={e => setRemoveObjectPrompt(e.target.value)} rows={3} placeholder="např. 'modré auto v pozadí'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
-                <button onClick={handleRemoveObject} disabled={isLoading || !removeObjectPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                    {isLoading ? 'Odstraňuji...' : 'Odstranit'}
-                </button>
-            </div>
-        );
-        case 'auto-crop':
-            return (
-                <div className="p-4 space-y-4 animate-fade-in-right">
-                    <div className="text-center">
-                         <AutoCropIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
-                         <h3 className="text-lg font-bold text-slate-100">Chytrý Ořez</h3>
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium text-slate-300 mb-2 block">Instrukce pro AI (Volitelné)</label>
-                        <textarea 
-                            value={autoCropPrompt} 
-                            onChange={e => setAutoCropPrompt(e.target.value)} 
-                            rows={2} 
-                            placeholder="např. 'Ořízni jen na brankáře', 'Detail míče'..." 
-                            className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700 mb-3"
-                        ></textarea>
-                        <label className="text-sm font-medium text-slate-300 mb-2 block">Cílový formát (AI)</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {ASPECT_RATIOS.map((ratio) => (
-                                <button
-                                    key={ratio.value}
-                                    onClick={() => setCropAspectRatio(ratio.value)}
-                                    className={`px-2 py-2 text-xs font-medium rounded-md border transition-all ${
-                                        cropAspectRatio === ratio.value 
-                                            ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' 
-                                            : 'border-slate-700 hover:bg-slate-800 text-slate-400'
-                                    }`}
-                                >
-                                    {ratio.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2 pt-2">
-                        <button onClick={() => handleAutoCrop(false)} disabled={isLoading} className="w-full inline-flex items-center justify-center px-4 py-2 border border-slate-600 text-sm font-medium rounded-md shadow-sm text-slate-200 bg-slate-800 hover:bg-slate-700 disabled:opacity-50">
-                            {isLoading ? 'Ořezávám...' : 'Pouze Oříznout'}
-                        </button>
-                        <button onClick={() => handleAutoCrop(true)} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                             {isLoading ? 'Zpracovávám...' : 'Oříznout a přejít k exportu'}
-                        </button>
-                    </div>
-                </div>
-            );
-        case 'replace-background':
-            return (
-                <div className="p-4 space-y-4 animate-fade-in-right">
-                    <BackgroundReplacementIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
-                    <h3 className="text-lg font-bold text-slate-100">Vyměnit pozadí</h3>
-                    <p className="text-sm text-slate-400">Popište nové pozadí, které chcete vložit do obrázku.</p>
-                    <textarea value={replaceBgPrompt} onChange={e => setReplaceBgPrompt(e.target.value)} rows={3} placeholder="např. 'rušná ulice v Tokiu v noci'" className="w-full bg-slate-800 rounded-md p-2 text-sm focus:ring-cyan-500 focus:border-cyan-500 border-slate-700"></textarea>
-                    <button onClick={handleReplaceBg} disabled={isLoading || !replaceBgPrompt.trim()} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                        {isLoading ? 'Měním pozadí...' : 'Vyměnit pozadí'}
-                    </button>
-                </div>
-            );
-        case 'style-transfer':
-            return (
-                <div className="p-4 space-y-4 animate-fade-in-right">
-                     <StyleTransferIcon className="w-12 h-12 mx-auto text-cyan-400 mb-2"/>
-                    <h3 className="text-lg font-bold text-slate-100">Přenos stylu</h3>
-                    <p className="text-sm text-slate-400">Vyberte obrázek, jehož styl chcete aplikovat na aktuální fotografii.</p>
-                    <input
-                        ref={styleFileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(e) => setStyleTransferFile(e.target.files ? e.target.files[0] : null)}
-                        className="hidden"
-                    />
-                    <button onClick={() => styleFileInputRef.current?.click()} className="w-full flex items-center justify-center px-4 py-6 border-2 border-dashed border-slate-700 rounded-lg hover:border-cyan-500 transition-colors">
-                        {styleTransferFile ? (
-                            <p className="text-sm text-slate-300 break-all">{styleTransferFile.name}</p>
-                        ) : (
-                            <div className="text-center">
-                                <UploadIcon className="w-8 h-8 mx-auto text-slate-500"/>
-                                <p className="mt-2 text-sm text-slate-400">Vyberte obrázek stylu</p>
-                            </div>
-                        )}
-                    </button>
-                    <button onClick={handleStyleTransfer} disabled={isLoading || !styleTransferFile} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-2 mt-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                        {isLoading ? 'Aplikuji styl...' : 'Aplikovat styl'}
-                    </button>
-                </div>
-            );
-        case 'user-presets':
-            return (
-                <div className="p-4 space-y-4 animate-fade-in-right">
-                    <div className="flex items-center gap-3"><PresetIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Uživatelské presety</h3></div>
-                    {props.userPresets.length > 0 ? (
-                        <div className="space-y-2">
-                            {props.userPresets.map(preset => (
-                                <button key={preset.id} className="w-full text-left p-2 rounded hover:bg-slate-800 transition-colors">
-                                    {preset.name}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-slate-500">Zatím nemáte žádné uložené presety.</p>
-                    )}
-                     <p className="text-sm text-slate-500 mt-4">Možnost ukládání a aplikace presetů bude brzy přidána.</p>
-                </div>
-            );
-        case 'history':
-            return (
-                <div className="p-4 space-y-4 animate-fade-in-right">
-                    <div className="flex items-center gap-3"><HistoryIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Historie úprav</h3></div>
-                    <div className="space-y-2 text-sm max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                        {[...history.past, history.present].slice().reverse().map((entry, index, arr) => (
-                            <div key={entry.actionName + index} className={`px-3 py-2 rounded-md ${index === 0 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 bg-slate-800/50'}`}>
-                               <span className="font-mono text-xs opacity-60 mr-2">{arr.length - 1 - index}</span> {entry.actionName}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        case 'export':
-             return (
-                <div className="p-4 space-y-5 animate-fade-in-right">
-                    <div className="flex items-center gap-3"><ExportIcon className="w-6 h-6 text-cyan-400"/><h3 className="text-lg font-bold text-slate-100">Exportovat obrázek</h3></div>
-                    <div>
-                        <label className="text-sm font-medium text-slate-300">Formát</label>
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                            <button onClick={() => setExportOptions(o => ({...o, format: 'jpeg'}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.format === 'jpeg' ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>JPEG</button>
-                            <button onClick={() => setExportOptions(o => ({...o, format: 'png'}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.format === 'png' ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>PNG</button>
-                        </div>
-                    </div>
-                    {exportOptions.format === 'jpeg' && (
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                                <label className="text-sm font-medium text-slate-300">Kvalita</label>
-                                <span className="text-sm font-mono text-slate-400 w-12 text-right">{exportOptions.quality}</span>
-                            </div>
-                            <input
-                                type="range" min="1" max="100" value={exportOptions.quality}
-                                onChange={(e) => setExportOptions(o => ({...o, quality: Number(e.target.value)}))}
-                                className="custom-slider"
-                            />
-                        </div>
-                    )}
-                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-300">Velikost</label>
-                         <div className="mt-2 grid grid-cols-2 gap-2">
-                            <button onClick={() => setExportOptions(o => ({...o, scale: 1}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.scale === 1 ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>Původní</button>
-                            <button onClick={() => setExportOptions(o => ({...o, scale: 0.5}))} className={`px-4 py-2 text-sm rounded-md border transition-all ${exportOptions.scale === 0.5 ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-md' : 'border-slate-700 hover:bg-slate-800'}`}>Poloviční</button>
-                        </div>
-                    </div>
-                    <button onClick={handleDownload} disabled={isLoading} className="w-full aurora-glow inline-flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50">
-                        {isLoading ? 'Exportuji...' : 'Stáhnout obrázek'}
-                    </button>
-                </div>
-            );
-      default:
-        return (
-          <div className="p-4 animate-fade-in-right">
-            <h3 className="text-lg font-bold text-slate-100">Editor Artifex AI</h3>
-            <p className="text-slate-400 mt-2">Vyberte nástroj z levého menu a začněte s úpravami.</p>
-          </div>
-        );
-    }
+  const handleManualExport = async () => {
+      if (!activeFile) return;
+      try {
+          const blob = await applyEditsAndExport(activeFile.previewUrl, manualEdits, exportOptions);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          // Determine extension based on format
+          const ext = exportOptions.format === 'jpeg' ? 'jpg' : 'png';
+          a.download = `edited_${activeFile.file.name.split('.')[0]}.${ext}`;
+          a.click();
+          URL.revokeObjectURL(url);
+          addNotification(t.msg_success, 'info');
+      } catch (e) {
+          addNotification(t.msg_error, 'error');
+      }
   };
 
-  if (!files || files.length === 0) {
-      return (
-          <div className="w-full h-full flex flex-col">
-              <Header {...props} />
-              <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-500 p-8">
-                  <UploadIcon className="w-24 h-24 mb-6" />
-                  <h2 className="text-3xl font-bold text-slate-200">Editor je připraven</h2>
-                  <p className="mt-2 text-lg">Nahrajte prosím jeden nebo více obrázků pro zahájení úprav.</p>
-              </div>
-          </div>
-      );
+  const handleApplyPreset = (preset: Preset) => {
+      setManualEdits(prev => ({...prev, ...preset.edits}));
+      saveManualHistorySnapshot();
+      addNotification(`Preset "${preset.name}" applied.`, 'info');
+  };
+
+  // --- Render Helpers ---
+
+  // 1. If no image selected
+  if (!activeFile) {
+    return (
+      <div className="flex-1 flex flex-col h-full bg-slate-950">
+         <Header title={t.app_title} onOpenApiKeyModal={props.onOpenApiKeyModal} onToggleSidebar={props.onToggleSidebar} />
+         <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+            <UploadIcon className="w-16 h-16 mb-4 opacity-50" />
+            <p className="text-xl font-medium">{t.editor_no_image}</p>
+            <p className="mt-2 text-sm">{t.editor_upload_hint}</p>
+         </div>
+      </div>
+    );
   }
 
+  // 2. Main Render
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900 bg-grid-pattern">
-      <Header {...props} />
-      <div className="flex-1 flex min-h-0">
-        {/* Action Panel */}
-        <div className="w-80 flex-shrink-0 bg-slate-950/70 backdrop-blur-xl border-r border-slate-800/50 overflow-y-auto custom-scrollbar">
-          {renderActionPanel()}
-        </div>
-
-        {/* Main Image View */}
-        <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden" onWheel={handleWheel}>
-          {isLoading && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
-              <ArrowPathIcon className="w-12 h-12 text-fuchsia-500 animate-spin" />
-              <p className="mt-4 text-lg text-white font-semibold">{loadingMessage}</p>
-            </div>
-          )}
-          
-          {activeFile && (
-            <div 
-                ref={imageContainerRef}
-                className="relative w-full h-full flex items-center justify-center select-none touch-none"
-                onMouseDown={handleMouseDown}
-                onTouchStart={handleMouseDown}
-                style={{ 
-                    cursor: isManualCropping 
-                        ? (interactionMode.startsWith('resize') ? `${interactionMode.replace('resize-', '')}-resize` : (interactionMode === 'move' ? 'move' : 'crosshair'))
-                        : (zoomLevel > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default') 
-                }}
+    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
+        <Header title={t.nav_studio} onOpenApiKeyModal={props.onOpenApiKeyModal} onToggleSidebar={props.onToggleSidebar} />
+        
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+            
+            {/* --- LEFT: Image Canvas --- */}
+            <div className="flex-1 bg-slate-900/50 relative overflow-hidden flex items-center justify-center bg-grid-pattern group" ref={imageContainerRef}
+                 onWheel={handleWheel}
+                 onMouseDown={handleMouseDown}
+                 onTouchStart={handleMouseDown}
             >
-                {/* Wrapper div for Zoom and Pan transform */}
-                <div 
-                    className="relative transition-transform duration-75 ease-out"
-                    style={{ 
-                        transform: `scale(${zoomLevel}) translate(${panPosition.x}px, ${panPosition.y}px)`,
-                        maxWidth: '100%',
-                        maxHeight: '100%',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                    }}
-                >
-                    {/* 
-                    Comparison Logic: 
-                    1. If isHoldingCompare is TRUE (user pressing eye button), show ONLY Original (Highest Priority).
-                    2. Else if isCompareMode is TRUE (slider active), show Slider View.
-                    3. Else show standard Edited View.
-                    */}
-                    
-                    {isHoldingCompare ? (
-                        <div className="relative max-w-full max-h-full z-50 animate-fade-in">
-                            <img
-                                src={activeFile.originalPreviewUrl}
-                                alt="Originál"
-                                className="block max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                                draggable="false"
-                            />
-                            <div className="absolute top-4 left-4 bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse">
-                                Původní fotografie
-                            </div>
-                        </div>
-                    ) : isCompareMode ? (
-                    <div ref={imageBoundsRef} className="relative max-w-full max-h-full shadow-2xl rounded-lg overflow-hidden group select-none">
-                        {/* After Image (Bottom Layer) - now represents the 'Right' side naturally */}
-                        <img
-                            key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
-                            src={editedPreviewUrl || activeFile.previewUrl}
-                            alt="Po úpravě"
-                            className="block max-w-full max-h-full object-contain rounded-lg"
-                            draggable="false"
-                        />
-                        
-                        {/* Before Image (Top Layer) - clipped from right to show 'Left' side */}
-                        <div 
-                            className="absolute top-0 left-0 w-full h-full overflow-hidden rounded-lg"
-                            style={{ clipPath: `inset(0 ${100 - compareSliderPosition}% 0 0)` }}
-                        >
-                            <img
-                                src={activeFile.originalPreviewUrl}
-                                alt="Před úpravou"
-                                className="block max-w-full max-h-full object-contain absolute top-0 left-0 w-full h-full"
-                                draggable="false"
-                            />
-                        </div>
+                {/* Image Container with Zoom/Pan */}
+                {activeFile && (
+                    <div 
+                        ref={imageBoundsRef}
+                        className={`relative shadow-2xl transition-transform duration-75 ease-out origin-center ${!isPanning && !isManualCropping ? 'transition-all duration-300' : ''}`}
+                        style={{ 
+                            transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+                            cursor: isManualCropping ? 'crosshair' : (zoomLevel > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default'),
+                            maxHeight: '90%',
+                            maxWidth: '90%'
+                        }}
+                    >
+                         {/* Show VIDEO if generated and active tool is video */}
+                         {activeAction?.action === 'video-generation' && activeFile.generatedVideo ? (
+                             <video 
+                                src={activeFile.generatedVideo.url} 
+                                controls 
+                                autoPlay 
+                                loop 
+                                className="max-h-full max-w-full rounded-sm shadow-2xl ring-2 ring-cyan-500/50"
+                             />
+                         ) : (
+                             <>
+                                {/* Base Image */}
+                                <img 
+                                    ref={imageRef}
+                                    src={activeFile.previewUrl} 
+                                    alt="Edit" 
+                                    className="max-h-full max-w-full object-contain rounded-sm select-none pointer-events-none" // pointer-events-none important for drag handling on container
+                                />
+                                
+                                {/* Manual Edits Overlay (Live Preview) */}
+                                {!isCompareMode && editedPreviewUrl && !isHoldingCompare && (
+                                    <img 
+                                        src={editedPreviewUrl} 
+                                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                                    />
+                                )}
 
-                        {/* Labels */}
-                        <div className={`absolute top-4 left-4 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-2 py-1 rounded pointer-events-none transition-opacity duration-300 ${isDraggingSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            Před
-                        </div>
-                        <div className={`absolute top-4 right-4 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-2 py-1 rounded pointer-events-none transition-opacity duration-300 ${isDraggingSlider ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            Po
-                        </div>
+                                {/* Comparison Slider Overlay */}
+                                {(isCompareMode || isHoldingCompare) && editedPreviewUrl && (
+                                    <div className="absolute inset-0 w-full h-full select-none overflow-hidden">
+                                        {/* "Before" Label */}
+                                        <div className="absolute top-4 left-4 bg-black/60 text-white text-xs px-2 py-1 rounded z-20 pointer-events-none">{t.compare_before}</div>
+                                        {/* "After" Label */}
+                                        <div className="absolute top-4 right-4 bg-black/60 text-white text-xs px-2 py-1 rounded z-20 pointer-events-none">{t.compare_after}</div>
 
-                        {/* Slider Divider and Handle */}
-                        <div
-                            className="absolute top-0 bottom-0 w-1 cursor-ew-resize flex items-center justify-center z-10 group/slider"
-                            style={{ left: `${compareSliderPosition}%`, transform: 'translateX(-50%)' }}
-                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingSlider(true); }}
-                            onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingSlider(true); }}
-                            draggable="false"
-                        >
-                            <div className="absolute w-0.5 h-full bg-white/80 shadow-[0_0_8px_rgba(0,0,0,0.8)]"></div>
-                            <div className="absolute w-8 h-8 rounded-full bg-slate-900/90 backdrop-blur-sm border-2 border-cyan-400 flex items-center justify-center text-cyan-400 shadow-lg transition-transform hover:scale-110 active:scale-95">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /> {/* Left Arrow */}
-                                </svg>
-                                <svg className="w-4 h-4 -ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> {/* Right Arrow */}
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                    ) : (
-                    <div className="relative max-w-full max-h-full">
-                        <img
-                            ref={imageRef}
-                            key={activeFile.id + (editedPreviewUrl || activeFile.previewUrl)}
-                            src={editedPreviewUrl || activeFile.previewUrl}
-                            alt="Active"
-                            className={`block max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-opacity duration-200 ${isGeneratingPreview ? 'opacity-70' : 'opacity-100'}`}
-                            draggable="false"
-                        />
-                        {/* Manual Crop Overlay & Controls */}
-                        {isManualCropping && (
-                            <>
-                                <div className="absolute inset-0 pointer-events-none z-40 select-none">
-                                    {/* Darken entire area */}
-                                    <div className="absolute inset-0 bg-black/50"></div>
-                                    
-                                    {/* Cutout for selection */}
-                                    {cropSelection && cropSelection.w > 0 && (
+                                        {/* Top Layer (Edited/After) - Clipped */}
                                         <div 
-                                            className="absolute border border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
-                                            style={{
-                                                left: `${cropSelection.x}%`,
-                                                top: `${cropSelection.y}%`,
-                                                width: `${cropSelection.w}%`,
-                                                height: `${cropSelection.h}%`,
-                                                pointerEvents: 'auto'
-                                            }}
+                                            className="absolute inset-0 w-full h-full"
+                                            style={{ clipPath: `inset(0 ${100 - compareSliderPosition}% 0 0)` }}
                                         >
-                                            {/* Rule of thirds grid */}
-                                            <div className="absolute w-full h-1/3 top-1/3 border-t border-b border-white/30 pointer-events-none"></div>
-                                            <div className="absolute h-full w-1/3 left-1/3 border-l border-r border-white/30 pointer-events-none"></div>
-                                            
-                                            {/* Resize Handles */}
-                                            {/* Top-Left */}
-                                            <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-white border border-slate-400 cursor-nw-resize"></div>
-                                            {/* Top-Right */}
-                                            <div className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-white border border-slate-400 cursor-ne-resize"></div>
-                                            {/* Bottom-Left */}
-                                            <div className="absolute -left-1.5 -bottom-1.5 w-3 h-3 bg-white border border-slate-400 cursor-sw-resize"></div>
-                                            {/* Bottom-Right */}
-                                            <div className="absolute -right-1.5 -bottom-1.5 w-3 h-3 bg-white border border-slate-400 cursor-se-resize"></div>
+                                            <img src={editedPreviewUrl} className="w-full h-full object-contain" />
                                         </div>
-                                    )}
-                                </div>
 
-                                {/* NEW INSTRUCTION BANNER - Top Center */}
-                                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 shadow-2xl animate-fade-in-up pointer-events-auto">
-                                     <span className="text-slate-200 text-sm font-medium">Tažením a úpravou rohů vyberte oblast</span>
-                                </div>
-                            </>
-                        )}
+                                        {/* Slider Handle */}
+                                        <div 
+                                            className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] hover:bg-cyan-400 transition-colors"
+                                            style={{ left: `${compareSliderPosition}%` }}
+                                            onMouseDown={() => setIsDraggingSlider(true)}
+                                            onTouchStart={() => setIsDraggingSlider(true)}
+                                        >
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-900">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" /></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                             </>
+                         )}
+
+                         {/* Manual Crop Overlay */}
+                         {isManualCropping && cropSelection && (
+                             <div className="absolute inset-0 z-30 pointer-events-none">
+                                 {/* Darken area outside crop */}
+                                 <div className="absolute inset-0 bg-black/50" 
+                                      style={{ 
+                                          clipPath: `polygon(0% 0%, 0% 100%, ${cropSelection.x}% 100%, ${cropSelection.x}% ${cropSelection.y}%, ${cropSelection.x + cropSelection.w}% ${cropSelection.y}%, ${cropSelection.x + cropSelection.w}% ${cropSelection.y + cropSelection.h}%, ${cropSelection.x}% ${cropSelection.y + cropSelection.h}%, ${cropSelection.x}% 100%, 100% 100%, 100% 0%)`
+                                      }}
+                                 ></div>
+                                 
+                                 {/* Crop Rectangle */}
+                                 <div 
+                                     className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)] pointer-events-auto cursor-move"
+                                     style={{ 
+                                         left: `${cropSelection.x}%`, 
+                                         top: `${cropSelection.y}%`, 
+                                         width: `${cropSelection.w}%`, 
+                                         height: `${cropSelection.h}%` 
+                                     }}
+                                 >
+                                     {/* Grid Lines */}
+                                     <div className="absolute inset-0 flex flex-col">
+                                         <div className="flex-1 border-b border-white/30"></div>
+                                         <div className="flex-1 border-b border-white/30"></div>
+                                         <div className="flex-1"></div>
+                                     </div>
+                                     <div className="absolute inset-0 flex flex-row">
+                                          <div className="flex-1 border-r border-white/30"></div>
+                                          <div className="flex-1 border-r border-white/30"></div>
+                                          <div className="flex-1"></div>
+                                     </div>
+
+                                     {/* Handles */}
+                                     <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 cursor-nw-resize"></div>
+                                     <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 cursor-ne-resize"></div>
+                                     <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 cursor-sw-resize"></div>
+                                     <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 cursor-se-resize"></div>
+                                 </div>
+                             </div>
+                         )}
                     </div>
-                    )}
-                    {isGeneratingPreview && !isCompareMode && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                            <ArrowPathIcon className="w-8 h-8 text-white animate-spin" />
-                        </div>
+                )}
+                
+                {/* Floating Action Bar (Zoom/Undo) */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 shadow-xl z-40">
+                    <button onClick={onUndo} className="p-2 hover:text-white text-slate-400 transition-colors" title="Zpět (Ctrl+Z)">
+                        <UndoIcon className="w-5 h-5" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-700"></div>
+                    <button onClick={() => handleZoom(-0.2)} className="p-2 hover:text-white text-slate-400 transition-colors">
+                        <ZoomOutIcon className="w-5 h-5" />
+                    </button>
+                    <span className="text-xs font-mono w-12 text-center text-slate-300">{Math.round(zoomLevel * 100)}%</span>
+                    <button onClick={() => handleZoom(0.2)} className="p-2 hover:text-white text-slate-400 transition-colors">
+                        <ZoomInIcon className="w-5 h-5" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-700"></div>
+                    <button onClick={() => { setZoomLevel(1); setPanPosition({x:0,y:0}); }} className="p-2 hover:text-white text-slate-400 transition-colors" title="Fit to Screen">
+                        <MagnifyingGlassIcon className="w-5 h-5" />
+                    </button>
+                    {editedPreviewUrl && (
+                        <>
+                             <div className="w-px h-4 bg-slate-700"></div>
+                             <button 
+                                className={`p-2 transition-colors ${isCompareMode ? 'text-cyan-400' : 'text-slate-400 hover:text-white'}`}
+                                onClick={() => setIsCompareMode(p => !p)}
+                                title={t.compare_btn}
+                                onMouseDown={() => setIsHoldingCompare(true)}
+                                onMouseUp={() => setIsHoldingCompare(false)}
+                                onMouseLeave={() => setIsHoldingCompare(false)}
+                                onTouchStart={() => setIsHoldingCompare(true)}
+                                onTouchEnd={() => setIsHoldingCompare(false)}
+                             >
+                                 <EyeIcon className="w-5 h-5" />
+                             </button>
+                        </>
                     )}
                 </div>
 
-                 {/* Unified Bottom Toolbar - Swaps between Standard and Crop Mode */}
-                 {isManualCropping ? (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 animate-fade-in-up">
-                         <button 
-                             onClick={cancelManualCropMode} 
-                             className="flex items-center justify-center gap-2 w-32 px-4 py-3 bg-slate-900/90 backdrop-blur-xl text-slate-300 hover:text-white rounded-2xl shadow-lg border border-slate-700/50 font-semibold transition-all hover:bg-red-500/20 hover:border-red-500/50"
-                         >
-                             <XIcon className="w-5 h-5" />
-                             <span>Zrušit</span>
-                         </button>
-                         <button 
-                             onClick={applyManualCrop} 
-                             disabled={!cropSelection || cropSelection.w < 5}
-                             className={`flex items-center justify-center gap-2 w-32 px-4 py-3 bg-gradient-to-r from-cyan-500 to-fuchsia-600 text-white rounded-2xl shadow-lg font-bold transition-all transform hover:scale-105 active:scale-95 aurora-glow border border-white/10 ${(!cropSelection || cropSelection.w < 5) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                            </svg>
-                            <span>Oříznout</span>
-                         </button>
+                {/* Loading Overlay */}
+                {isLoading && (
+                    <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 border-4 border-slate-700 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
+                        <p className="text-lg font-medium text-slate-200 animate-pulse">{loadingMessage}</p>
                     </div>
-                 ) : (
-                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1.5 bg-slate-950/80 backdrop-blur-xl rounded-2xl border border-slate-800/80 shadow-2xl animate-fade-in-up">
+                )}
+                
+                {/* Crop Toolbar (Floating) */}
+                {isManualCropping && (
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center space-x-3 bg-slate-900/90 backdrop-blur-md px-6 py-3 rounded-xl border border-cyan-500/50 shadow-2xl z-50 animate-fade-in-up">
+                        <span className="text-sm font-bold text-white mr-2">Ořezávání...</span>
+                        <button onClick={applyManualCrop} className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold rounded-md shadow-lg transition-colors">
+                            Použít
+                        </button>
+                        <button onClick={cancelManualCropMode} className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-md transition-colors">
+                            <XIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+
+                {/* Feedback Overlay */}
+                <div className="absolute bottom-24 right-6 z-50">
+                    {showFeedback && (
+                         <FeedbackButtons 
+                            onFeedback={(fb) => recordExplicitFeedback(showFeedback, fb)}
+                            onTimeout={() => setShowFeedback(null)}
+                         />
+                    )}
+                </div>
+            </div>
+
+            {/* --- RIGHT: Tools Panel --- */}
+            <div className="w-full lg:w-80 bg-slate-900/80 backdrop-blur-xl border-l border-slate-800/50 flex flex-col h-[40vh] lg:h-auto z-20">
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
                     
-                    {/* Zoom Section */}
-                    <div className="flex items-center bg-slate-900/50 rounded-xl px-1 border border-slate-800/50">
-                        <button onClick={() => handleZoom(-0.5)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all" title="Oddálit">
-                            <ZoomOutIcon className="w-5 h-5" />
-                        </button>
-                        <span className="text-xs font-mono font-semibold w-10 text-center text-slate-300 select-none">
-                            {Math.round(zoomLevel * 100)}%
-                        </span>
-                        <button onClick={() => handleZoom(0.5)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all" title="Přiblížit">
-                            <ZoomInIcon className="w-5 h-5" />
-                        </button>
-                    </div>
+                    {/* ANALYSIS PANEL */}
+                    {(!activeAction || activeAction.action === 'analysis') && (
+                        <div className="p-6 space-y-6 animate-fade-in-slide-up">
+                             <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-bold text-slate-100">{t.nav_analysis}</h3>
+                                <button onClick={handleAnalyze} className="text-xs bg-cyan-500/10 text-cyan-400 px-2 py-1 rounded hover:bg-cyan-500/20 border border-cyan-500/20 transition-colors">
+                                    {activeFile.analysis ? 'Re-Analyze' : 'Spustit analýzu'}
+                                </button>
+                             </div>
+                             
+                             {activeFile.analysis ? (
+                                 <div className="space-y-5 text-sm">
+                                     <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">{t.editor_desc}</span>
+                                         <p className="text-slate-300 leading-relaxed">{activeFile.analysis.description}</p>
+                                     </div>
+                                     
+                                     <div>
+                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.editor_tech}</span>
+                                         <div className="grid grid-cols-3 gap-2">
+                                             <div className="bg-slate-800/50 p-2 rounded text-center border border-slate-700/50">
+                                                 <span className="block text-[10px] text-slate-500">ISO</span>
+                                                 <span className="font-mono text-cyan-400">{activeFile.analysis.technicalInfo.ISO}</span>
+                                             </div>
+                                             <div className="bg-slate-800/50 p-2 rounded text-center border border-slate-700/50">
+                                                 <span className="block text-[10px] text-slate-500">Clona</span>
+                                                 <span className="font-mono text-fuchsia-400">{activeFile.analysis.technicalInfo.Aperture}</span>
+                                             </div>
+                                             <div className="bg-slate-800/50 p-2 rounded text-center border border-slate-700/50">
+                                                 <span className="block text-[10px] text-slate-500">Závěrka</span>
+                                                 <span className="font-mono text-emerald-400">{activeFile.analysis.technicalInfo.ShutterSpeed}</span>
+                                             </div>
+                                         </div>
+                                     </div>
 
-                    <button onClick={() => { setZoomLevel(1); setPanPosition({x:0, y:0}); }} className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-xl border border-transparent hover:border-slate-800 transition-all" title="Resetovat pohled">
-                        <MagnifyingGlassIcon className="w-5 h-5" />
-                    </button>
+                                     <div>
+                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.editor_suggestions}</span>
+                                         <ul className="space-y-2">
+                                             {activeFile.analysis.suggestions.map((s, i) => (
+                                                 <li key={i} className="flex items-start text-slate-300">
+                                                     <span className="text-cyan-500 mr-2">•</span>
+                                                     {s}
+                                                 </li>
+                                             ))}
+                                         </ul>
+                                     </div>
 
-                    <div className="w-px h-6 bg-slate-800 mx-1"></div>
+                                     {activeFile.analysis.proactiveSuggestions && activeFile.analysis.proactiveSuggestions.length > 0 && (
+                                         <div>
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">{t.editor_proactive}</span>
+                                            <div className="space-y-2">
+                                                {activeFile.analysis.proactiveSuggestions.map((s, i) => (
+                                                    <div key={i} className="bg-gradient-to-r from-slate-800 to-slate-800/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between group hover:border-cyan-500/50 transition-colors">
+                                                        <span className="text-slate-300 text-xs">{s.text}</span>
+                                                        <button 
+                                                            onClick={() => {
+                                                                // Switch to the relevant tool based on action
+                                                                onNavigate({ view: 'editor', action: s.action });
+                                                                if (s.action === 'remove-object') {
+                                                                    // Pre-fill prompt if possible (requires parsing text, simplified here)
+                                                                    setRemoveObjectPrompt(s.text.replace('Remove ', '')); 
+                                                                }
+                                                            }}
+                                                            className="ml-2 bg-slate-700 hover:bg-cyan-600 text-white p-1.5 rounded-md transition-colors"
+                                                        >
+                                                            <ArrowPathIcon className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                         </div>
+                                     )}
+                                 </div>
+                             ) : (
+                                 <div className="text-center py-10 opacity-50">
+                                     <ArrowPathIcon className="w-8 h-8 mx-auto mb-2 animate-pulse" />
+                                     <p className="text-sm">Analýza není k dispozici.</p>
+                                 </div>
+                             )}
+                        </div>
+                    )}
 
-                    {/* Comparison Section */}
-                    <button
-                        onMouseDown={() => setIsHoldingCompare(true)}
-                        onMouseUp={() => setIsHoldingCompare(false)}
-                        onMouseLeave={() => setIsHoldingCompare(false)}
-                        onTouchStart={() => setIsHoldingCompare(true)}
-                        onTouchEnd={() => setIsHoldingCompare(false)}
-                        className={`p-2.5 rounded-xl border transition-all ${isHoldingCompare ? 'bg-cyan-500 text-white border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 border-transparent hover:text-cyan-400 hover:bg-slate-900 hover:border-slate-800'}`}
-                        title="Podržte pro originál"
+                    {/* MANUAL EDITS PANEL */}
+                    {activeAction?.action === 'manual-edit' && (
+                        <ManualEditControls 
+                            edits={manualEdits} 
+                            onEditChange={(key, value) => {
+                                setManualEdits(prev => ({...prev, [key]: value}));
+                            }}
+                            onReset={() => {
+                                setManualEdits(INITIAL_EDITS);
+                                saveManualHistorySnapshot();
+                            }}
+                            exportOptions={exportOptions}
+                            onExportOptionsChange={setExportOptions}
+                            onRequestExport={handleManualExport}
+                            onStartManualCrop={startManualCropMode}
+                            onSnapshot={saveManualHistorySnapshot}
+                        />
+                    )}
+
+                    {/* AUTOPILOT PANEL */}
+                    {activeAction?.action === 'autopilot' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                             <h3 className="text-lg font-bold text-slate-100">{t.nav_autopilot}</h3>
+                             <p className="text-sm text-slate-400">{t.tool_autopilot_desc}</p>
+                             <button
+                                onClick={handleAutopilot}
+                                disabled={isLoading}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                             >
+                                 <AutopilotIcon className="w-5 h-5 mr-2" />
+                                 {t.tool_autopilot_btn}
+                             </button>
+                        </div>
+                    )}
+
+                    {/* SOCIAL MEDIA PANEL */}
+                    {activeAction?.action === 'social-media' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                             <h3 className="text-lg font-bold text-slate-100">{t.tool_social_title}</h3>
+                             <p className="text-sm text-slate-400">{t.tool_social_desc}</p>
+                             
+                             <button
+                                onClick={handleGenerateSocial}
+                                disabled={isLoading}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 transition-all"
+                             >
+                                 <SparklesIcon className="w-5 h-5 mr-2" />
+                                 {t.tool_social_btn}
+                             </button>
+
+                             {activeFile.socialContent && (
+                                 <div className="mt-6 space-y-6">
+                                     <div className="space-y-4">
+                                         {activeFile.socialContent.captions.map((cap, i) => (
+                                             <div key={i} className="bg-slate-800 p-3 rounded-lg border border-slate-700 relative group">
+                                                 <span className="text-[10px] uppercase font-bold text-cyan-500 mb-1 block">{cap.tone}</span>
+                                                 <p className="text-sm text-slate-200">{cap.text}</p>
+                                                 <button 
+                                                    onClick={() => navigator.clipboard.writeText(cap.text)}
+                                                    className="absolute top-2 right-2 p-1 text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Copy"
+                                                 >
+                                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" /></svg>
+                                                 </button>
+                                             </div>
+                                         ))}
+                                     </div>
+                                     <div>
+                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Hashtags</h4>
+                                         <div className="flex flex-wrap gap-2">
+                                             {activeFile.socialContent.hashtags.map(tag => (
+                                                 <span key={tag} className="text-xs bg-slate-800 text-cyan-400 px-2 py-1 rounded-full cursor-pointer hover:bg-slate-700" onClick={() => navigator.clipboard.writeText(tag)}>
+                                                     {tag}
+                                                 </span>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 </div>
+                             )}
+                        </div>
+                    )}
+
+                    {/* VIDEO GENERATION PANEL */}
+                    {activeAction?.action === 'video-generation' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                             <h3 className="text-lg font-bold text-slate-100">{t.tool_video_title}</h3>
+                             <p className="text-sm text-slate-400">{t.tool_video_desc}</p>
+                             
+                             <textarea
+                                value={videoPrompt}
+                                onChange={e => setVideoPrompt(e.target.value)}
+                                placeholder={t.tool_video_prompt}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-md p-3 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                                rows={2}
+                             />
+
+                             <button
+                                onClick={handleGenerateVideo}
+                                disabled={isLoading}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-fuchsia-600 to-purple-700 hover:from-fuchsia-700 hover:to-purple-800 transition-all"
+                             >
+                                 <FilmIcon className="w-5 h-5 mr-2" />
+                                 {t.tool_video_btn}
+                             </button>
+
+                             {activeFile.generatedVideo && (
+                                 <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700">
+                                     <p className="text-xs text-green-400 flex items-center">
+                                         <span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                                         Video je připraveno (vlevo).
+                                     </p>
+                                     <a 
+                                        href={activeFile.generatedVideo.url} 
+                                        download={`video_${activeFile.file.name}.mp4`}
+                                        className="mt-2 block text-center text-xs text-cyan-400 hover:underline"
+                                     >
+                                         Stáhnout MP4
+                                     </a>
+                                 </div>
+                             )}
+                        </div>
+                    )}
+                    
+                    {/* REMOVE OBJECT PANEL */}
+                    {activeAction?.action === 'remove-object' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                            <h3 className="text-lg font-bold text-slate-100">{t.nav_remove_obj}</h3>
+                            <p className="text-sm text-slate-400">{t.tool_remove_desc}</p>
+                            <textarea
+                                value={removeObjectPrompt}
+                                onChange={e => setRemoveObjectPrompt(e.target.value)}
+                                placeholder={t.tool_remove_placeholder}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-md p-3 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                                rows={3}
+                            />
+                            <button
+                                onClick={handleRemoveObject}
+                                disabled={isLoading || !removeObjectPrompt}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50 transition-all"
+                            >
+                                {t.tool_remove_btn}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* AUTO CROP PANEL */}
+                    {activeAction?.action === 'auto-crop' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                            <h3 className="text-lg font-bold text-slate-100">{t.tool_crop_title}</h3>
+                            
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">{t.tool_crop_instr}</label>
+                                <input
+                                    type="text"
+                                    value={autoCropPrompt}
+                                    onChange={e => setAutoCropPrompt(e.target.value)}
+                                    placeholder={t.tool_crop_placeholder}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">{t.tool_crop_format}</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['Original', '1:1', '16:9', '4:3', '9:16', '5:4'].map(ratio => (
+                                        <button
+                                            key={ratio}
+                                            onClick={() => setCropAspectRatio(ratio)}
+                                            className={`px-2 py-2 text-xs font-medium rounded border transition-all ${cropAspectRatio === ratio ? 'bg-cyan-500/20 border-cyan-500 text-white' : 'border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                                        >
+                                            {ratio}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleAutoCrop}
+                                disabled={isLoading}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50 transition-all"
+                            >
+                                {t.tool_crop_btn_only}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* REPLACE BACKGROUND PANEL */}
+                    {activeAction?.action === 'replace-background' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                            <h3 className="text-lg font-bold text-slate-100">{t.nav_bg}</h3>
+                            <p className="text-sm text-slate-400">{t.tool_bg_desc}</p>
+                            <textarea
+                                value={replaceBgPrompt}
+                                onChange={e => setReplaceBgPrompt(e.target.value)}
+                                placeholder={t.tool_bg_placeholder}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-md p-3 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none"
+                                rows={3}
+                            />
+                            <button
+                                onClick={handleReplaceBackground}
+                                disabled={isLoading || !replaceBgPrompt}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50 transition-all"
+                            >
+                                {t.tool_bg_btn}
+                            </button>
+                        </div>
+                    )}
+
+                     {/* STYLE TRANSFER PANEL */}
+                     {activeAction?.action === 'style-transfer' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                            <h3 className="text-lg font-bold text-slate-100">{t.nav_style}</h3>
+                            <p className="text-sm text-slate-400">{t.tool_style_desc}</p>
+                            
+                            <input 
+                                type="file" 
+                                ref={styleFileInputRef}
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={(e) => {
+                                    if(e.target.files?.[0]) setStyleTransferFile(e.target.files[0]);
+                                }}
+                            />
+                            
+                            <div 
+                                onClick={() => styleFileInputRef.current?.click()}
+                                className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center cursor-pointer hover:border-cyan-500 hover:bg-slate-800/50 transition-all"
+                            >
+                                {styleTransferFile ? (
+                                    <div className="flex flex-col items-center">
+                                        <img src={URL.createObjectURL(styleTransferFile)} alt="Style" className="w-20 h-20 object-cover rounded mb-2" />
+                                        <span className="text-xs text-slate-300">{styleTransferFile.name}</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-sm text-slate-400">{t.tool_style_select}</span>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={handleStyleTransfer}
+                                disabled={isLoading || !styleTransferFile}
+                                className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-2 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 disabled:opacity-50 transition-all"
+                            >
+                                {t.tool_style_btn}
+                            </button>
+                        </div>
+                    )}
+                    
+                     {/* PRESETS PANEL */}
+                     {activeAction?.action === 'user-presets' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                            <h3 className="text-lg font-bold text-slate-100">{t.nav_presets}</h3>
+                            
+                            {props.userPresets.length === 0 ? (
+                                <p className="text-sm text-slate-500 text-center py-4">Žádné uložené presety.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {props.userPresets.map(preset => (
+                                        <div key={preset.id} className="flex items-start flex-col sm:flex-row sm:items-center justify-between bg-slate-800 p-3 rounded-md hover:bg-slate-700 transition-colors group gap-2">
+                                            <span className="text-sm font-medium text-slate-200">{preset.name}</span>
+                                            <div className="flex space-x-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                 <button 
+                                                    onClick={() => handleApplyPreset(preset)}
+                                                    className="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded hover:bg-cyan-500/30"
+                                                 >
+                                                     Apply
+                                                 </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* HISTORY PANEL */}
+                    {activeAction?.action === 'history' && (
+                        <div className="p-6 space-y-4 animate-fade-in-right">
+                             <h3 className="text-lg font-bold text-slate-100">{t.nav_history}</h3>
+                             <ul className="space-y-3 relative border-l border-slate-700 ml-2 pl-4">
+                                 {history.past.map((entry, i) => (
+                                     <li key={i} className="text-xs text-slate-500 relative">
+                                         <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-slate-700"></div>
+                                         {entry.actionName}
+                                     </li>
+                                 ))}
+                                 <li className="text-sm font-bold text-cyan-400 relative">
+                                      <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></div>
+                                      {history.present.actionName} (Current)
+                                 </li>
+                                 {history.future.map((entry, i) => (
+                                     <li key={i} className="text-xs text-slate-500 opacity-50 relative">
+                                          <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-slate-800 border border-slate-700"></div>
+                                         {entry.actionName}
+                                     </li>
+                                 ))}
+                             </ul>
+                        </div>
+                    )}
+
+                </div>
+                
+                {/* File Strip (Bottom of Right Panel) */}
+                <div className="h-24 bg-slate-900 border-t border-slate-800/50 p-2 flex space-x-2 overflow-x-auto custom-scrollbar flex-shrink-0">
+                    {files.map(file => (
+                        <div 
+                            key={file.id} 
+                            onClick={() => onSetActiveFileId(file.id)}
+                            className={`relative aspect-square rounded-md overflow-hidden cursor-pointer flex-shrink-0 border-2 transition-all ${file.id === activeFileId ? 'border-cyan-500 ring-2 ring-cyan-500/20' : 'border-transparent hover:border-slate-600'}`}
+                        >
+                            <img src={file.previewUrl} className="w-full h-full object-cover" />
+                            {file.isAnalyzing && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    <div 
+                        onClick={() => document.getElementById('add-more-files')?.click()}
+                        className="aspect-square bg-slate-800 rounded-md flex items-center justify-center cursor-pointer hover:bg-slate-700 border-2 border-dashed border-slate-700 hover:border-slate-500 flex-shrink-0 text-slate-400"
+                        title="Přidat další"
                     >
-                        <EyeIcon className="w-5 h-5" />
-                    </button>
-
-                    <button 
-                        onClick={() => setIsCompareMode(p => !p)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
-                            isCompareMode 
-                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.15)]' 
-                            : 'text-slate-400 border-transparent hover:bg-slate-900 hover:text-slate-200 hover:border-slate-800'
-                        }`}
-                    >
-                        <ChevronDoubleLeftIcon className={`w-4 h-4 transition-transform ${isCompareMode ? 'rotate-180' : ''}`} />
-                        <span className="hidden sm:inline">Porovnat</span>
-                    </button>
-                 </div>
-                 )}
-
-                 {showFeedback && (
-                    <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-50 animate-fade-in-slide-up">
-                        <FeedbackButtons onFeedback={(f) => handleFeedback(showFeedback, f)} onTimeout={() => setShowFeedback(null)} />
+                        <span className="text-2xl">+</span>
                     </div>
-                 )}
-            </div>
-          )}
-           <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
-                <button onClick={onUndo} disabled={history.past.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700" title="Zpět (Ctrl+Z)"><UndoIcon className="w-5 h-5" /></button>
-                <button onClick={onRedo} disabled={history.future.length === 0} className="p-2 bg-slate-800 rounded-full disabled:opacity-50 hover:bg-slate-700" title="Vpřed (Ctrl+Y)"><RedoIcon className="w-5 h-5" /></button>
+                    {/* Hidden input for adding more files - simplified logic for demo */}
+                    <input id="add-more-files" type="file" multiple className="hidden" onChange={(e) => {
+                         if(e.target.files?.length) {
+                             const newFiles = Array.from(e.target.files).map((item) => {
+                                 const f = item as File;
+                                 return {
+                                     id: `${Date.now()}-${Math.random()}`,
+                                     file: f,
+                                     previewUrl: URL.createObjectURL(f),
+                                     originalPreviewUrl: URL.createObjectURL(f)
+                                 };
+                             });
+                             onSetFiles(curr => [...curr, ...newFiles], 'Added files');
+                         }
+                    }}/>
+                </div>
             </div>
         </div>
-
-        {/* Filmstrip */}
-        <div className="w-32 flex-shrink-0 bg-slate-950/70 backdrop-blur-lg border-l border-slate-800/50 p-2 overflow-y-auto custom-scrollbar">
-            <div className="flex flex-col space-y-2">
-                {files.map(file => (
-                    <button key={file.id} onClick={() => onSetActiveFileId(file.id)} className={`relative aspect-square w-full rounded-md overflow-hidden focus:outline-none group transition-all duration-200 ${activeFileId === file.id ? 'ring-2 ring-offset-2 ring-offset-slate-950 ring-cyan-500' : 'hover:scale-105'}`}>
-                        <img src={file.previewUrl} alt="thumbnail" className="w-full h-full object-cover" />
-                        <div className={`absolute inset-0 bg-black/50 transition-opacity ${activeFileId === file.id ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}></div>
-                    </button>
-                ))}
-            </div>
-        </div>
-      </div>
     </div>
   );
 };

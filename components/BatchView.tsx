@@ -1,8 +1,10 @@
+
 import React, { useState, useMemo } from 'react';
 import type { UploadedFile } from '../types';
 import { autopilotImage } from '../services/geminiService';
 import { AutopilotIcon } from './icons';
 import Header from './Header';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface BatchViewProps {
   files: UploadedFile[];
@@ -15,6 +17,7 @@ interface BatchViewProps {
 }
 
 const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotification, title, onOpenApiKeyModal, onToggleSidebar }) => {
+  const { t } = useTranslation();
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set(files.map(f => f.id)));
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -43,7 +46,7 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
 
   const handleBatchAutopilot = async () => {
     if (selectedFiles.length === 0) {
-      addNotification('Nejprve vyberte alespoň jeden obrázek.', 'error');
+      addNotification(t.raw_no_files, 'error');
       return;
     }
 
@@ -58,9 +61,9 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
         const { file: newFile } = await autopilotImage(file.file);
         updatedFiles.push({ id: file.id, file: newFile });
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Neznámá chyba';
-        errors.push(`Chyba při zpracování ${file.file.name}: ${message}`);
-        addNotification(`Chyba při zpracování ${file.file.name}`, 'error');
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        errors.push(`${t.batch_error} ${file.file.name}: ${message}`);
+        addNotification(`${t.batch_error} ${file.file.name}`, 'error');
       } finally {
         setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
@@ -70,11 +73,11 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
 
     if (updatedFiles.length > 0) {
       onBatchComplete(updatedFiles);
-      addNotification(`Dávkové zpracování dokončeno. ${updatedFiles.length} obrázků bylo upraveno.`, 'info');
+      addNotification(t.batch_complete, 'info');
     }
 
     if (errors.length > 0) {
-      addNotification(`Během zpracování došlo k ${errors.length} chybám.`, 'error');
+       // Optional: more detailed error reporting
     }
   };
 
@@ -88,23 +91,23 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
       <div className="flex-1 w-full flex flex-col items-center p-4 sm:p-8 overflow-y-auto">
         <div className="w-full max-w-6xl">
           <div className="text-center mb-10">
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">Hromadné zpracování</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">{t.batch_title}</h1>
             <p className="mt-3 text-xl text-slate-400 max-w-3xl mx-auto">
-              Aplikujte AI vylepšení na více obrázků najednou.
+              {t.batch_subtitle}
             </p>
           </div>
 
           <div className="backdrop-blur-xl p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-800/50">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-xl font-bold">Vyberte obrázky</h2>
-                <p className="text-sm text-slate-500">{selectedFileIds.size} z {files.length} vybráno</p>
+                <h2 className="text-xl font-bold">{t.batch_select}</h2>
+                <p className="text-sm text-slate-500">{selectedFileIds.size} / {files.length} {t.batch_selected}</p>
               </div>
               <button 
                 onClick={toggleSelectAll}
                 className="px-4 py-2 text-sm font-medium rounded-md border border-slate-700 hover:bg-slate-800 transition-colors"
               >
-                {selectedFileIds.size === files.length ? 'Odznačit vše' : 'Označit vše'}
+                {selectedFileIds.size === files.length ? t.batch_deselect_all : t.batch_select_all}
               </button>
             </div>
 
@@ -127,7 +130,7 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
                 </div>
             ) : (
                 <div className="text-center py-10 border-2 border-dashed border-slate-700 rounded-lg">
-                    <p className="text-slate-500">Nejprve nahrajte nějaké obrázky.</p>
+                    <p className="text-slate-500">{t.editor_upload_hint}</p>
                 </div>
             )}
             
@@ -139,12 +142,12 @@ const BatchView: React.FC<BatchViewProps> = ({ files, onBatchComplete, addNotifi
                     className="w-full sm:w-auto inline-flex items-center px-8 py-3 border border-transparent text-base font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-1 active:translate-y-0 aurora-glow"
                 >
                     <AutopilotIcon className="mr-3 h-6 w-6" />
-                    Spustit Autopilot AI na {selectedFiles.length} {selectedFiles.length === 1 ? 'obrázku' : (selectedFiles.length > 1 && selectedFiles.length < 5) ? 'obrázcích' : 'obrázcích'}
+                    {t.batch_run} {selectedFiles.length}
                 </button>
                 {isProcessing && (
                     <div className="mt-6">
                         <div className="flex justify-between mb-1">
-                            <span className="text-base font-medium text-slate-300">Zpracovávám...</span>
+                            <span className="text-base font-medium text-slate-300">{t.batch_processing}</span>
                             <span className="text-sm font-medium text-slate-300">{progress.current} / {progress.total}</span>
                         </div>
                         <div className="w-full bg-slate-700 rounded-full h-2.5">

@@ -1,6 +1,8 @@
 
 // FIX: Define all necessary types for the application.
 
+export type Language = 'cs' | 'en';
+
 export interface UploadedFile {
   id: string;
   file: File;
@@ -8,6 +10,21 @@ export interface UploadedFile {
   originalPreviewUrl: string; // Added for before/after comparison
   analysis?: AnalysisResult;
   isAnalyzing?: boolean;
+  socialContent?: SocialMediaContent;
+  generatedVideo?: GeneratedVideo;
+}
+
+export interface SocialMediaContent {
+    captions: {
+        tone: string;
+        text: string;
+    }[];
+    hashtags: string[];
+}
+
+export interface GeneratedVideo {
+    url: string;
+    expiry: number;
 }
 
 export interface ProactiveSuggestion {

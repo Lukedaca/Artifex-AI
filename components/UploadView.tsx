@@ -3,6 +3,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { UploadIcon, ArrowPathIcon } from './icons';
 import Header from './Header';
 import { isRawFile, processRawFile, RAW_EXTENSIONS_STRING } from '../utils/rawProcessor';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface UploadViewProps {
   onFilesSelected: (files: File[]) => void;
@@ -20,6 +21,7 @@ const UploadView: React.FC<UploadViewProps> = ({
   onToggleSidebar,
   addNotification
 }) => {
+  const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -51,13 +53,13 @@ const UploadView: React.FC<UploadViewProps> = ({
           const file = incomingFiles[i];
           if (isRawFile(file)) {
               rawCount++;
-              setProcessingStatus(`Konvertuji RAW: ${file.name} (${rawCount}...)`);
+              setProcessingStatus(`RAW: ${file.name} (${rawCount}...)`);
               try {
                   const convertedFile = await processRawFile(file);
                   finalFiles.push(convertedFile);
               } catch (error) {
                   console.error(`Failed to convert ${file.name}`, error);
-                  if (addNotification) addNotification(`Nepodařilo se převést ${file.name}`, 'error');
+                  if (addNotification) addNotification(`${t.msg_error}: ${file.name}`, 'error');
               }
           } else {
               finalFiles.push(file);
@@ -108,7 +110,7 @@ const UploadView: React.FC<UploadViewProps> = ({
                     <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
                     <div className="absolute inset-0 rounded-full border-4 border-t-cyan-500 border-r-fuchsia-500 border-b-transparent border-l-transparent animate-spin"></div>
                  </div>
-                 <h3 className="text-2xl font-bold text-slate-200 mb-2">Zpracovávám soubory...</h3>
+                 <h3 className="text-2xl font-bold text-slate-200 mb-2">{t.upload_processing}</h3>
                  <p>{processingStatus}</p>
             </div>
         ) : (
@@ -150,10 +152,10 @@ const UploadView: React.FC<UploadViewProps> = ({
                     style={{ transform: isDragging ? 'scale(1.15) translateY(-12px)' : 'scale(1)', filter: isDragging ? `drop-shadow(0 0 15px #22d3ee)` : 'none' }}
                 />
                 <h3 className="mt-4 text-3xl font-bold tracking-tight text-slate-100">
-                    Přetáhněte fotografie sem
+                    {t.upload_drag}
                 </h3>
                 <p className="mt-2 text-lg text-slate-400">
-                    Podpora JPG, PNG, WEBP a <strong>RAW (CR2, NEF, ARW...)</strong>
+                    {t.upload_support} <strong>RAW (CR2, NEF, ARW...)</strong>
                 </p>
                 <div className="mt-12">
                     <input
@@ -170,11 +172,11 @@ const UploadView: React.FC<UploadViewProps> = ({
                         className="inline-flex items-center px-10 py-4 border border-transparent text-base font-semibold rounded-xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-fuchsia-500 transition-all transform hover:-translate-y-1 active:translate-y-0 hover:shadow-2xl hover:shadow-cyan-500/30 aurora-glow"
                     >
                         <UploadIcon className="-ml-1 mr-3 h-6 w-6" />
-                        Vybrat soubory
+                        {t.upload_btn}
                     </button>
                 </div>
                 <p className="mt-10 text-xs text-slate-500">
-                    RAW soubory budou automaticky vyvolány a převedeny.
+                    {t.upload_raw}
                 </p>
             </div>
             </div>

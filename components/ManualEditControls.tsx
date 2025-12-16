@@ -2,6 +2,7 @@
 import React from 'react';
 import type { ManualEdits } from '../types';
 import { AutoCropIcon, ExportIcon } from './icons';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface SliderProps {
   label: string;
@@ -45,14 +46,6 @@ interface ManualEditControlsProps {
   onSnapshot: () => void; // Request to save current state to history
 }
 
-const ASPECT_RATIOS = [
-    { label: 'Orig.', value: undefined }, // undefined means no crop
-    { label: '1:1', value: 1 },
-    { label: '16:9', value: 16/9 },
-    { label: '4:3', value: 4/3 },
-    { label: '3:2', value: 3/2 },
-];
-
 const ManualEditControls: React.FC<ManualEditControlsProps> = ({ 
     edits, 
     onEditChange, 
@@ -63,31 +56,40 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
     onStartManualCrop,
     onSnapshot
 }) => {
+  const { t } = useTranslation();
 
   // Wrapper to handle edit change but NOT trigger snapshot yet
   const handleChange = <K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
       onEditChange(key, value);
   };
 
+  const ASPECT_RATIOS = [
+      { label: t.export_original, value: undefined }, // undefined means no crop
+      { label: '1:1', value: 1 },
+      { label: '16:9', value: 16/9 },
+      { label: '4:3', value: 4/3 },
+      { label: '3:2', value: 3/2 },
+  ];
+
   return (
     <div className="p-4 space-y-5 animate-fade-in-right pb-20"> {/* Extra padding bottom for export button */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-100">Manuální úpravy</h3>
-        <button onClick={onReset} className="text-sm font-medium text-cyan-400 hover:underline">Resetovat</button>
+        <h3 className="text-lg font-bold text-slate-100">{t.manual_title}</h3>
+        <button onClick={onReset} className="text-sm font-medium text-cyan-400 hover:underline">{t.manual_reset}</button>
       </div>
 
       {/* Crop Section */}
       <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
           <div className="flex items-center gap-2">
               <AutoCropIcon className="w-4 h-4 text-cyan-400" />
-              <label className="text-sm font-medium text-slate-300">Oříznutí</label>
+              <label className="text-sm font-medium text-slate-300">{t.tool_crop_title}</label>
           </div>
           
           <button 
               onClick={onStartManualCrop}
               className="w-full flex items-center justify-center px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md transition-colors border border-slate-600"
           >
-              <span className="mr-2">✂️</span> Aktivovat manuální ořez
+              <span className="mr-2">✂️</span> {t.manual_crop_active}
           </button>
 
           <div className="pt-2 border-t border-slate-700/50">
@@ -110,21 +112,21 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
           </div>
       </div>
 
-      <Slider label="Jas" value={edits.brightness} onChange={(v) => handleChange('brightness', v)} onAfterChange={onSnapshot} />
-      <Slider label="Kontrast" value={edits.contrast} onChange={(v) => handleChange('contrast', v)} onAfterChange={onSnapshot} />
-      <Slider label="Sytost" value={edits.saturation} onChange={(v) => handleChange('saturation', v)} onAfterChange={onSnapshot} />
-      <Slider label="Živost" value={edits.vibrance} onChange={(v) => handleChange('vibrance', v)} onAfterChange={onSnapshot} />
-      <Slider label="Stíny" value={edits.shadows} onChange={(v) => handleChange('shadows', v)} onAfterChange={onSnapshot} />
-      <Slider label="Světlé tóny" value={edits.highlights} onChange={(v) => handleChange('highlights', v)} onAfterChange={onSnapshot} />
-      <Slider label="Zřetelnost" value={edits.clarity} min={0} onChange={(v) => handleChange('clarity', v)} onAfterChange={onSnapshot} />
-      <Slider label="Ostrost" value={edits.sharpness} min={0} onChange={(v) => handleChange('sharpness', v)} onAfterChange={onSnapshot} />
-      <Slider label="Redukce šumu" value={edits.noiseReduction} min={0} onChange={(v) => handleChange('noiseReduction', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_brightness} value={edits.brightness} onChange={(v) => handleChange('brightness', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_contrast} value={edits.contrast} onChange={(v) => handleChange('contrast', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_saturation} value={edits.saturation} onChange={(v) => handleChange('saturation', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_vibrance} value={edits.vibrance} onChange={(v) => handleChange('vibrance', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_shadows} value={edits.shadows} onChange={(v) => handleChange('shadows', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_highlights} value={edits.highlights} onChange={(v) => handleChange('highlights', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_clarity} value={edits.clarity} min={0} onChange={(v) => handleChange('clarity', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_sharpness} value={edits.sharpness} min={0} onChange={(v) => handleChange('sharpness', v)} onAfterChange={onSnapshot} />
+      <Slider label={t.manual_noise} value={edits.noiseReduction} min={0} onChange={(v) => handleChange('noiseReduction', v)} onAfterChange={onSnapshot} />
 
       <hr className="border-slate-700/50 my-4" />
 
       {/* Export Settings inside Manual Edits */}
       <div className="space-y-4">
-          <h4 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Nastavení Exportu</h4>
+          <h4 className="text-sm font-bold text-slate-200 uppercase tracking-wider">{t.manual_export_settings}</h4>
           
           {/* Format Selector */}
           <div className="grid grid-cols-2 gap-2">
@@ -146,7 +148,7 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
           {exportOptions.format === 'jpeg' && (
               <div className="space-y-1">
                    <div className="flex justify-between">
-                      <label className="text-xs text-slate-400">Kvalita</label>
+                      <label className="text-xs text-slate-400">{t.export_quality}</label>
                       <span className="text-xs text-slate-400">{exportOptions.quality}%</span>
                    </div>
                    <input
@@ -162,7 +164,7 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
               className="w-full aurora-glow flex items-center justify-center px-4 py-3 mt-4 border border-transparent text-sm font-bold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:bg-cyan-600 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
           >
               <ExportIcon className="w-4 h-4 mr-2" />
-              Dokončit a Exportovat
+              {t.manual_finish}
           </button>
       </div>
     </div>

@@ -3,6 +3,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { UploadIcon, ArrowPathIcon, ExportIcon, XCircleIcon } from './icons';
 import Header from './Header';
 import { processRawFile, RAW_EXTENSIONS_STRING } from '../utils/rawProcessor';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface RAWConverterViewProps {
     title: string;
@@ -27,6 +28,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
     addNotification,
     onFilesConverted
 }) => {
+    const { t } = useTranslation();
     const [rawFiles, setRawFiles] = useState<File[]>([]);
     const [convertedFiles, setConvertedFiles] = useState<ConvertedFile[]>([]);
     const [isConverting, setIsConverting] = useState(false);
@@ -51,7 +53,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
     
     const handleConvert = async () => {
         if (rawFiles.length === 0) {
-            addNotification("Nebyly vybrány žádné soubory.", 'error');
+            addNotification(t.raw_no_files, 'error');
             return;
         }
 
@@ -73,7 +75,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
 
             } catch (error: any) {
                 console.error(error);
-                addNotification(`Chyba při konverzi souboru ${file.name}: ${error.message || 'Neznámá chyba'}`, 'error');
+                addNotification(`${t.msg_error} ${file.name}: ${error.message || 'Unknown error'}`, 'error');
             } finally {
                 setProgress(prev => ({ ...prev, current: prev.current + 1 }));
             }
@@ -82,7 +84,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
         setConvertedFiles(newConvertedFiles);
         setIsConverting(false);
         if (newConvertedFiles.length > 0) {
-            addNotification(`Konverze dokončena. ${newConvertedFiles.length} souborů připraveno.`, 'info');
+            addNotification(`${t.raw_done}. ${newConvertedFiles.length} ${t.notify_raw_success}`, 'info');
         }
     };
 
@@ -111,9 +113,9 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
             <div className="flex-1 flex flex-col items-center p-4 sm:p-8 overflow-y-auto">
                 <div className="w-full max-w-6xl">
                      <div className="text-center mb-10">
-                        <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">Převodník z RAW do JPEG</h1>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-slate-100">{t.raw_title}</h1>
                         <p className="mt-3 text-xl text-slate-400 max-w-3xl mx-auto">
-                            Samostatný nástroj pro hromadnou konverzi. Pro běžné úpravy můžete RAW soubory nahrát přímo v hlavní nabídce.
+                            {t.raw_subtitle}
                         </p>
                     </div>
 
@@ -129,9 +131,9 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
                             <div className="text-center">
                                 <UploadIcon className="mx-auto h-12 w-12 text-slate-500" />
                                 <p className="mt-4 font-semibold text-slate-300">
-                                    {rawFiles.length > 0 ? `${rawFiles.length} souborů vybráno` : "Přetáhněte RAW soubory sem"}
+                                    {rawFiles.length > 0 ? `${rawFiles.length} files selected` : t.raw_drag}
                                 </p>
-                                <p className="text-sm text-slate-400">nebo klikněte pro výběr</p>
+                                <p className="text-sm text-slate-400">{t.raw_or_click}</p>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -145,13 +147,13 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
                                     onClick={() => fileInputRef.current?.click()}
                                     className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-400 rounded-md hover:bg-cyan-500/10 transition-colors"
                                 >
-                                    {rawFiles.length > 0 ? "Vybrat jiné" : "Vybrat soubory"}
+                                    {rawFiles.length > 0 ? t.raw_select_other : t.upload_btn}
                                 </button>
                             </div>
                         </div>
                     ) : (
                         <div>
-                            <h3 className="text-xl font-bold mb-4">Konverze dokončena</h3>
+                            <h3 className="text-xl font-bold mb-4">{t.raw_done}</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                                 {convertedFiles.map((file) => (
                                     <div key={file.originalName} className="group relative aspect-square bg-slate-800 rounded-lg overflow-hidden shadow-md border border-slate-700/50">
@@ -163,7 +165,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
                                         </div>
                                         
                                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => downloadFile(file.url, file.originalName)} className="p-3 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-all transform hover:scale-110" title="Stáhnout">
+                                            <button onClick={() => downloadFile(file.url, file.originalName)} className="p-3 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-all transform hover:scale-110" title="Download">
                                                 <ExportIcon className="w-8 h-8" />
                                             </button>
                                         </div>
@@ -184,7 +186,7 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
                                 className="w-full inline-flex items-center justify-center px-6 py-4 border border-transparent text-lg font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-1 active:translate-y-0 aurora-glow"
                             >
                                 <ArrowPathIcon className="mr-3 h-6 w-6" />
-                                {isConverting ? `Analyzuji a převádím (${progress.current}/${progress.total})...` : `Konvertovat ${rawFiles.length === 0 ? '' : (rawFiles.length === 1 ? '1 soubor' : `${rawFiles.length} souborů`)}`}
+                                {isConverting ? `${t.raw_converting} (${progress.current}/${progress.total})...` : `${t.raw_convert} ${rawFiles.length === 0 ? '' : (rawFiles.length === 1 ? '1' : rawFiles.length)}`}
                             </button>
                         ) : (
                             <div className="flex flex-col sm:flex-row gap-4">
@@ -192,13 +194,13 @@ const RAWConverterView: React.FC<RAWConverterViewProps> = ({
                                     onClick={handleAddToProject}
                                     className="w-full sm:w-auto flex-1 inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 transition-all aurora-glow"
                                 >
-                                    Přidat do Studia
+                                    {t.raw_add}
                                 </button>
                                 <button
                                     onClick={() => { setRawFiles([]); setConvertedFiles([]); }}
                                     className="w-full sm:w-auto flex-1 inline-flex items-center justify-center px-6 py-3 border border-slate-700 text-sm font-medium rounded-md shadow-sm text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors"
                                 >
-                                    Převést další
+                                    {t.raw_convert_more}
                                 </button>
                             </div>
                         )}

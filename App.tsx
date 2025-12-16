@@ -21,6 +21,7 @@ import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } 
 import { hasSelectedApiKey } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
 import { getPresets } from './services/userProfileService';
+import { useTranslation } from './contexts/LanguageContext';
 
 
 // --- History Reducer ---
@@ -73,6 +74,7 @@ interface Notification {
 }
 
 function App() {
+  const { t } = useTranslation();
   const [view, setView] = useState<View>('home');
   const [history, dispatchHistory] = useReducer(historyReducer, initialHistoryState);
   const { present: { state: files } } = history;
@@ -143,7 +145,8 @@ function App() {
 
   const handleNavigate = useCallback(({ view: newView, action }: { view: View; action?: string }) => {
     if (newView === 'editor' && files.length === 0 && action) {
-        addNotification('Nejprve prosím nahrajte obrázek.', 'error');
+        // Fallback or generic message, though in practice t.editor_upload_hint covers this UX
+        addNotification(t.editor_no_image, 'error');
         return;
     }
     setView(newView);
@@ -152,7 +155,7 @@ function App() {
     } else {
       setActiveAction(null);
     }
-  }, [files.length, addNotification]);
+  }, [files.length, addNotification, t.editor_no_image]);
 
   const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
     const validFiles: UploadedFile[] = [];
@@ -167,7 +170,7 @@ function App() {
           originalPreviewUrl: previewUrl,
         });
       } catch (error) {
-        addNotification(`Soubor ${file.name} není podporován.`, 'error');
+        addNotification(`${t.msg_error}: ${file.name}`, 'error');
       }
     });
 
@@ -176,11 +179,12 @@ function App() {
     if (validFiles.length > 0) {
       setFiles(
         currentFiles => [...currentFiles, ...validFiles],
-        `Nahráno ${validFiles.length} souborů`
+        `Uploaded ${validFiles.length} files`
       );
       setView('editor');
+      addNotification(`${validFiles.length} ${t.notify_upload_success}`, 'info');
     }
-  }, [addNotification, setFiles]);
+  }, [addNotification, setFiles, t.msg_error, t.notify_upload_success]);
 
   const handleImageGenerated = useCallback((file: File) => {
     const previewUrl = URL.createObjectURL(file);
@@ -190,10 +194,10 @@ function App() {
       previewUrl: previewUrl,
       originalPreviewUrl: previewUrl,
     };
-    setFiles(currentFiles => [...currentFiles, newFile], 'Generován obrázek');
+    setFiles(currentFiles => [...currentFiles, newFile], 'Generated Image');
     setView('editor');
-    addNotification('Obrázek byl úspěšně vygenerován a přidán do projektu.', 'info');
-  }, [addNotification, setFiles]);
+    addNotification(t.notify_gen_success, 'info');
+  }, [addNotification, setFiles, t.notify_gen_success]);
 
   const handleBatchComplete = useCallback((updatedFiles: { id: string; file: File }[]) => {
     const updatedFilesMap = new Map(updatedFiles.map(f => [f.id, f]));
@@ -207,7 +211,7 @@ function App() {
         }
         return cf;
       }),
-      'Batch úpravy'
+      'Batch Edit'
     );
     setView('editor');
   }, [setFiles]);
@@ -217,23 +221,20 @@ function App() {
   }, [handleFilesSelected]);
 
   const handleKeySelectionAttempt = useCallback(async () => {
+    // When the user has attempted to select a key (closed the dialog),
+    // we must assume success and proceed, as per Gemini API guidelines regarding race conditions.
+    // Re-checking hasSelectedApiKey() immediately often returns false due to propagation delay,
+    // causing the modal to reopen infinitely.
     setIsApiKeyModalOpen(false);
-    const hasKey = await hasSelectedApiKey();
-    if (!hasKey) {
-      setTimeout(() => {
-          addNotification('Pro plnou funkčnost je potřeba vybrat API klíč.', 'error');
-          setIsApiKeyModalOpen(true);
-      }, 500); // Re-open if they closed without selecting
-    }
-  }, [addNotification]);
+  }, []);
   
   const getPageTitle = () => {
-      if (view === 'upload') return 'Nahrát fotky';
-      if (view === 'editor') return 'Editor & AI Analýza';
-      if (view === 'batch') return 'Hromadné zpracování';
-      if (view === 'generate') return 'Generátor obrázků';
-      if (view === 'raw-converter') return 'RAW Konvertor';
-      return 'Dashboard';
+      if (view === 'upload') return t.upload_title;
+      if (view === 'editor') return t.nav_studio;
+      if (view === 'batch') return t.batch_title;
+      if (view === 'generate') return t.gen_title;
+      if (view === 'raw-converter') return t.raw_title;
+      return t.app_title;
   }
 
   const renderView = () => {

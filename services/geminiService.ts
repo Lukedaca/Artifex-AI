@@ -1,18 +1,31 @@
 
 import { GoogleGenAI, Type, Modality } from '@google/genai';
-import type { AnalysisResult } from '../types';
+import type { AnalysisResult, Language, SocialMediaContent } from '../types';
 import { fileToBase64, base64ToFile } from '../utils/imageProcessor';
+import { getStoredApiKey } from '../utils/apiKey';
 
 // Helper to create a new GenAI instance for each request
-// This ensures the most up-to-date API key is used, as per guidelines
-const getGenAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const getGenAI = () => {
+    const apiKey = process.env.API_KEY || getStoredApiKey();
+    if (!apiKey) {
+        throw new Error("API Key is missing. Please set it in the settings.");
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
 /**
  * Analyzes an image to provide a description, technical info, and improvement suggestions.
+ * Respects the selected language for the text output.
  */
-export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
+export const analyzeImage = async (file: File, language: Language = 'cs'): Promise<AnalysisResult> => {
   const ai = getGenAI();
   const base64Image = await fileToBase64(file);
+
+  const langInstruction = language === 'cs' 
+    ? "Respond strictly in Czech language." 
+    : "Respond strictly in English language.";
+
+  const prompt = `Analyze this photograph. Provide a detailed description, suggest 3-5 specific improvements, and estimate the technical photo information (ISO, Aperture, Shutter Speed). Also provide 2 proactive suggestions for edits I could make, like "remove-object" or "auto-crop" based on the image content. ${langInstruction}`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-pro',
@@ -24,9 +37,7 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
             data: base64Image,
           },
         },
-        {
-          text: 'Analyze this photograph. Provide a detailed description, suggest 3-5 specific improvements, and estimate the technical photo information (ISO, Aperture, Shutter Speed). Also provide 2 proactive suggestions for edits I could make, like "remove-object" or "auto-crop" based on the image content.',
-        },
+        { text: prompt },
       ],
     },
     config: {
@@ -68,7 +79,6 @@ export const analyzeImage = async (file: File): Promise<AnalysisResult> => {
 };
 
 // Generic function for image-in, image-out editing tasks
-// Switched default back to gemini-2.5-flash-image for stability in edits
 const editImageWithPrompt = async (file: File, prompt: string, model = 'gemini-2.5-flash-image'): Promise<{ file: File }> => {
     const ai = getGenAI();
     const base64Image = await fileToBase64(file);
@@ -108,7 +118,7 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
   const prompt = `
       Role: Expert Image Processing AI.
       Task: Apply global photographic enhancements to lighting and color.
-
+      
       **STRICT CONSTRAINTS (DO NOT VIOLATE):**
       1.  **STRUCTURAL FIDELITY:** Do NOT change the shape, position, or geometry of ANY object. Do NOT warp faces. Do NOT move pixels.
       2.  **NO GENERATION:** Do NOT add details (hair, skin texture, objects) that are not present in the source.
@@ -123,7 +133,6 @@ export const autopilotImage = async (file: File): Promise<{ file: File }> => {
 
       Output: The exact same image content, but with professional color grading.
   `;
-  // Use 2.5-flash-image for editing to avoid 3-pro's tendency to hallucinate faces
   return editImageWithPrompt(file, prompt, 'gemini-2.5-flash-image');
 };
 
@@ -136,11 +145,10 @@ export const removeObject = async (file: File, objectToRemove: string): Promise<
 };
 
 /**
- * Automatically crops an image to improve composition with support for specific aspect ratios and user instructions.
+ * Automatically crops an image to improve composition.
  */
 export const autoCrop = async (file: File, aspectRatio: string = 'Original', instruction: string = ''): Promise<{ file: File }> => {
     
-    // Translate shorthand ratios to explicit geometric instructions
     const ratioMap: Record<string, string> = {
         '1:1': 'SQUARE aspect ratio (1:1). Width MUST EQUAL Height.',
         '16:9': 'LANDSCAPE aspect ratio (16:9). Width must be ~1.77x the Height.',
@@ -192,7 +200,7 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
     ]);
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image', // Switched to Flash for safer structure preservation
+        model: 'gemini-2.5-flash-image', 
         contents: {
             parts: [
                 { inlineData: { data: originalBase64, mimeType: originalFile.type } },
@@ -217,8 +225,7 @@ export const styleTransfer = async (originalFile: File, styleFile: File): Promis
 };
 
 /**
- * Generates a new image from a text prompt using Gemini Pro Image Preview.
- * THIS REMAINS GEMINI-3-PRO-IMAGE-PREVIEW as requested.
+ * Generates a new image from a text prompt.
  */
 export const generateImage = async (prompt: string): Promise<string> => {
   const ai = getGenAI();
@@ -236,4 +243,98 @@ export const generateImage = async (prompt: string): Promise<string> => {
   }
 
   return imagePart.inlineData.data;
+};
+
+/**
+ * Generates social media content (Captions, Hashtags) for an image.
+ */
+export const generateSocialContent = async (file: File, language: Language = 'cs'): Promise<SocialMediaContent> => {
+    const ai = getGenAI();
+    const base64Image = await fileToBase64(file);
+    
+    const langInstruction = language === 'cs' ? "in Czech" : "in English";
+    
+    const prompt = `
+        You are a professional social media manager. Analyze this image and create content for Instagram.
+        Provide 3 different captions with distinct tones (Professional, Funny, Inspirational).
+        Also provide 10 trending hashtags relevant to the image.
+        Output strictly in JSON ${langInstruction}.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+            parts: [
+                { inlineData: { data: base64Image, mimeType: file.type } },
+                { text: prompt }
+            ]
+        },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    captions: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                tone: { type: Type.STRING },
+                                text: { type: Type.STRING }
+                            }
+                        }
+                    },
+                    hashtags: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                    }
+                }
+            }
+        }
+    });
+    
+    return JSON.parse(response.text) as SocialMediaContent;
+};
+
+/**
+ * Generates a video from an image using the Veo model.
+ */
+export const generateVideoFromImage = async (file: File, prompt: string): Promise<string> => {
+    const ai = getGenAI();
+    const base64Image = await fileToBase64(file);
+    const apiKey = process.env.API_KEY || getStoredApiKey(); // Need raw key for download link
+
+    let operation = await ai.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        image: {
+            imageBytes: base64Image,
+            mimeType: file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png' // Veo prefers basic types
+        },
+        prompt: prompt || "Cinematic camera movement, natural motion",
+        config: {
+            numberOfVideos: 1,
+            aspectRatio: '16:9', // Veo restriction
+            resolution: '720p'
+        }
+    });
+
+    // Poll for completion
+    while (!operation.done) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+        operation = await ai.operations.getVideosOperation({operation: operation});
+    }
+
+    if (operation.error) {
+        throw new Error(operation.error.message || "Video generation failed");
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("No video URI returned.");
+    
+    // Fetch the MP4 bytes using the API key
+    const res = await fetch(`${downloadLink}&key=${apiKey}`);
+    if (!res.ok) throw new Error("Failed to download generated video.");
+    
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
 };

@@ -1,6 +1,7 @@
 
 import React from 'react';
 import type { EditorAction, View } from '../types';
+import { useTranslation } from '../contexts/LanguageContext';
 import {
   UploadIcon,
   AnalysisIcon,
@@ -17,6 +18,8 @@ import {
   StyleTransferIcon,
   BackgroundReplacementIcon,
   PresetIcon,
+  SparklesIcon,
+  FilmIcon,
 } from './icons';
 
 interface SidebarProps {
@@ -37,31 +40,6 @@ interface NavItemProps {
   isActive: boolean;
 }
 
-const mainTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
-  { icon: <LogoIcon className="w-5 h-5 flex-shrink-0" />, label: "Studio", view: "home" },
-  { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: "Nahrát fotky", view: "upload" },
-  // We re-use the UploadIcon for RAW converter but could use a specific camera icon if available
-  { icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>, label: "RAW Konvertor", view: "raw-converter" },
-  { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: "AI Analýza", view: "editor", action: "analysis" },
-  { icon: <ManualEditIcon className="w-5 h-5 flex-shrink-0"/>, label: "Manuální úpravy", view: "editor", action: "manual-edit" },
-  { icon: <BatchIcon className="w-5 h-5 flex-shrink-0"/>, label: "Batch zpracování", view: "batch" },
-];
-
-const presetsTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
-  { icon: <PresetIcon className="w-5 h-5 flex-shrink-0"/>, label: "Uživatelské presety", view: "editor", action: "user-presets" },
-];
-
-const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
-  { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: "Autopilot AI", view: "editor", action: "autopilot" },
-  { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: "Odstranit objekt", view: "editor", action: "remove-object" },
-  { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: "Automatické oříznutí", view: "editor", action: "auto-crop" },
-  { icon: <StyleTransferIcon className="w-5 h-5 flex-shrink-0"/>, label: "Přenos stylu", view: "editor", action: "style-transfer" },
-  { icon: <BackgroundReplacementIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vyměnit pozadí", view: "editor", action: "replace-background" },
-  { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: "Vytvořit obrázek", view: "generate" },
-  { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: "Export", view: "editor", action: "export" },
-  { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: "Historie", view: "editor", action: "history" },
-];
-
 const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, isActive }) => (
   <button 
     onClick={onClick} 
@@ -74,6 +52,33 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, onClick, isCollapsed, is
 );
 
 const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, currentView, activeAction }: SidebarProps) => {
+  const { t } = useTranslation();
+
+  const mainTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+    { icon: <LogoIcon className="w-5 h-5 flex-shrink-0" />, label: t.nav_studio, view: "home" },
+    { icon: <UploadIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_upload, view: "upload" },
+    { icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 flex-shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>, label: t.nav_raw, view: "raw-converter" },
+    { icon: <AnalysisIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_analysis, view: "editor", action: "analysis" },
+    { icon: <ManualEditIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_manual, view: "editor", action: "manual-edit" },
+    { icon: <BatchIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_batch, view: "batch" },
+  ];
+
+  const presetsTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+    { icon: <PresetIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_presets, view: "editor", action: "user-presets" },
+  ];
+
+  const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
+    { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_autopilot, view: "editor", action: "autopilot" },
+    { icon: <SparklesIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_social, view: "editor", action: "social-media" },
+    { icon: <FilmIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_video, view: "editor", action: "video-generation" },
+    { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_remove_obj, view: "editor", action: "remove-object" },
+    { icon: <AutoCropIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_crop, view: "editor", action: "auto-crop" },
+    { icon: <StyleTransferIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_style, view: "editor", action: "style-transfer" },
+    { icon: <BackgroundReplacementIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_bg, view: "editor", action: "replace-background" },
+    { icon: <GenerateImageIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_gen, view: "generate" },
+    { icon: <ExportIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_export, view: "editor", action: "export" },
+    { icon: <HistoryIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_history, view: "editor", action: "history" },
+  ];
 
   const handleNavigation = (payload: { view: View; action?: string }) => {
     onNavigate(payload);
@@ -90,7 +95,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
             {!isCollapsed && (
               <div className="flex-grow overflow-hidden">
                 <h1 className="text-xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">Artifex AI</h1>
-                <p className="text-xs text-slate-400 -mt-0.5">v3.1</p>
+                <p className="text-xs text-slate-400 -mt-0.5">v3.2</p>
               </div>
             )}
             <button onClick={onToggleCollapse} className="hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 -right-3.5 z-10 w-7 h-7 bg-slate-800 rounded-full shadow-lg border border-slate-700 text-slate-500 hover:text-cyan-500 transition-all duration-300 hover:scale-110 active:scale-100">
@@ -98,9 +103,9 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
             </button>
           </div>
           
-          <nav className="flex-grow flex flex-col space-y-8 overflow-y-auto p-4">
+          <nav className="flex-grow flex flex-col space-y-8 overflow-y-auto p-4 custom-scrollbar">
             <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Hlavní nástroje</h2>}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Tools</h2>}
               {isCollapsed && <hr className="mb-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {mainTools.map((item) => {
@@ -112,7 +117,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
               </div>
             </div>
              <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Styly & Presety</h2>}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Styles</h2>}
               {isCollapsed && <hr className="my-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {presetsTools.map((item) => {
@@ -124,7 +129,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
               </div>
             </div>
             <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">AI nástroje</h2>}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">AI Tools</h2>}
               {isCollapsed && <hr className="my-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {aiTools.map((item) => {

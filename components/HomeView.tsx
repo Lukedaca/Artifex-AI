@@ -1,19 +1,22 @@
+
 import React from 'react';
 import { LogoIcon, AutopilotIcon, EraserIcon, BatchIcon, GenerateImageIcon } from './icons';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface HomeViewProps {
   onEnterApp: () => void;
 }
 
-const features = [
-  { icon: <AutopilotIcon className="w-5 h-5 text-cyan-400" />, name: 'AI Autopilot' },
-  { icon: <EraserIcon className="w-5 h-5 text-cyan-400" />, name: 'Odstranění objektů' },
-  { icon: <BatchIcon className="w-5 h-5 text-cyan-400" />, name: 'Hromadné úpravy' },
-  { icon: <GenerateImageIcon className="w-5 h-5 text-cyan-400" />, name: 'Generování obrázků' },
-];
-
-
 const HomeView: React.FC<HomeViewProps> = ({ onEnterApp }) => {
+  const { t } = useTranslation();
+
+  const features = [
+    { icon: <AutopilotIcon className="w-5 h-5 text-cyan-400" />, name: t.nav_autopilot },
+    { icon: <EraserIcon className="w-5 h-5 text-cyan-400" />, name: t.nav_remove_obj },
+    { icon: <BatchIcon className="w-5 h-5 text-cyan-400" />, name: t.nav_batch },
+    { icon: <GenerateImageIcon className="w-5 h-5 text-cyan-400" />, name: t.nav_gen },
+  ];
+
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center text-center p-4 relative overflow-hidden bg-slate-950 text-white">
       {/* Background Glows */}
@@ -24,10 +27,10 @@ const HomeView: React.FC<HomeViewProps> = ({ onEnterApp }) => {
         <div className="animate-fade-in-up">
             <LogoIcon className="w-24 h-24 text-cyan-400 mx-auto" />
             <h1 className="mt-6 text-6xl md:text-7xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">
-            Artifex AI
+            {t.home_title}
             </h1>
             <p className="mt-4 max-w-2xl text-lg md:text-xl text-slate-400">
-            Transformujte své fotografie silou umělé inteligence. Analyzujte, upravujte a vytvářejte ohromující vizuály jediným kliknutím.
+            {t.home_subtitle}
             </p>
         </div>
 
@@ -45,7 +48,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onEnterApp }) => {
           className="mt-12 inline-flex items-center px-12 py-5 border border-transparent text-lg font-semibold rounded-2xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-fuchsia-500 transition-all transform hover:-translate-y-1 active:translate-y-0 hover:shadow-2xl hover:shadow-cyan-500/30 aurora-glow animate-fade-in-up"
           style={{ animationDelay: '400ms' }}
         >
-          Vstoupit do studia
+          {t.home_enter}
         </button>
       </div>
     </div>
