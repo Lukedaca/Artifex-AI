@@ -11,21 +11,19 @@ import RAWConverterView from './components/RAWConverterView';
 
 // Components
 import Sidebar from './components/Sidebar';
-import ApiKeyModal from './components/ApiKeyModal';
 import { XCircleIcon } from './components/icons';
 
 // Types
 import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } from './types';
 
 // Utils & Services
-import { hasSelectedApiKey } from './utils/apiKey';
+import { clearLegacyKeys } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
 import { getPresets } from './services/userProfileService';
 import { useTranslation } from './contexts/LanguageContext';
 
 
 // --- History Reducer ---
-// This will handle undo/redo for the file list
 const initialHistoryState: History = {
   past: [],
   present: { state: [], actionName: 'Initial State' },
@@ -82,9 +80,6 @@ function App() {
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<EditorAction>(null);
 
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [apiKeyChecked, setApiKeyChecked] = useState(false);
-
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -94,18 +89,10 @@ function App() {
 
   // --- Effects ---
 
-  // API Key Check
+  // Security Startup Cleanup
   useEffect(() => {
-    if (view === 'home' || apiKeyChecked) return;
-    const checkKey = async () => {
-        const hasKey = await hasSelectedApiKey();
-        if (!hasKey) {
-            setIsApiKeyModalOpen(true);
-        }
-        setApiKeyChecked(true); // only check once per session
-    };
-    checkKey();
-  }, [view, apiKeyChecked]);
+    clearLegacyKeys();
+  }, []);
 
   // Load presets
   useEffect(() => {
@@ -115,7 +102,6 @@ function App() {
   // Set permanent dark theme on mount
   useEffect(() => {
     document.documentElement.classList.add('dark');
-    localStorage.setItem('artifex-theme', 'dark');
   }, []);
 
   // --- Handlers ---
@@ -144,8 +130,8 @@ function App() {
   };
 
   const handleNavigate = useCallback(({ view: newView, action }: { view: View; action?: string }) => {
-    if (newView === 'editor' && files.length === 0 && action) {
-        // Fallback or generic message, though in practice t.editor_upload_hint covers this UX
+    // CRITICAL FIX: Allow navigation to editor if the action is youtube-thumbnail, even if files are empty
+    if (newView === 'editor' && files.length === 0 && action && action !== 'youtube-thumbnail') {
         addNotification(t.editor_no_image, 'error');
         return;
     }
@@ -205,8 +191,6 @@ function App() {
       currentFiles => currentFiles.map(cf => {
         if (updatedFilesMap.has(cf.id)) {
           const newFile = updatedFilesMap.get(cf.id)!;
-          // Clean up old object URL
-          // NOTE: Do not revoke here to support history undo
           return { ...cf, file: newFile.file, previewUrl: URL.createObjectURL(newFile.file) };
         }
         return cf;
@@ -220,14 +204,6 @@ function App() {
       handleFilesSelected(files);
   }, [handleFilesSelected]);
 
-  const handleKeySelectionAttempt = useCallback(async () => {
-    // When the user has attempted to select a key (closed the dialog),
-    // we must assume success and proceed, as per Gemini API guidelines regarding race conditions.
-    // Re-checking hasSelectedApiKey() immediately often returns false due to propagation delay,
-    // causing the modal to reopen infinitely.
-    setIsApiKeyModalOpen(false);
-  }, []);
-  
   const getPageTitle = () => {
       if (view === 'upload') return t.upload_title;
       if (view === 'editor') return t.nav_studio;
@@ -240,7 +216,6 @@ function App() {
   const renderView = () => {
     const headerProps = {
         title: getPageTitle(),
-        onOpenApiKeyModal: () => setIsApiKeyModalOpen(true),
         onToggleSidebar: handleToggleSidebar,
     };
 
@@ -250,11 +225,11 @@ function App() {
       case 'upload':
         return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} addNotification={addNotification} />;
       case 'editor':
-        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} />;
+        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} onOpenApiKeyModal={() => {}} />;
       case 'batch':
-        return <BatchView {...headerProps} files={files} onBatchComplete={handleBatchComplete} addNotification={addNotification} />;
+        return <BatchView {...headerProps} files={files} onBatchComplete={handleBatchComplete} addNotification={addNotification} onSetFiles={setFiles} />;
       case 'generate':
-        return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} />;
+        return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} onOpenApiKeyModal={() => {}} />;
       case 'raw-converter':
         return <RAWConverterView {...headerProps} addNotification={addNotification} onFilesConverted={handleRawFilesConverted} />;
       default:
@@ -281,8 +256,6 @@ function App() {
             {renderView()}
         </main>
         
-        <ApiKeyModal isOpen={isApiKeyModalOpen} onKeySelectionAttempt={handleKeySelectionAttempt} />
-
         <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
             {notifications.map(n => (
                 <div key={n.id} className={`flex items-start p-4 rounded-lg shadow-lg text-sm font-medium border animate-fade-in-right ${n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-200'}`}>

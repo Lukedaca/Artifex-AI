@@ -1,17 +1,22 @@
 
-// FIX: Define all necessary types for the application.
-
 export type Language = 'cs' | 'en';
 
 export interface UploadedFile {
   id: string;
   file: File;
   previewUrl: string;
-  originalPreviewUrl: string; // Added for before/after comparison
+  originalPreviewUrl: string;
   analysis?: AnalysisResult;
   isAnalyzing?: boolean;
   socialContent?: SocialMediaContent;
   generatedVideo?: GeneratedVideo;
+  assessment?: QualityAssessment;
+}
+
+export interface QualityAssessment {
+    score: number; // 0-100
+    isBestPick: boolean;
+    flags: string[]; // ['Blurry', 'Closed Eyes', 'Bad Exposure', 'Great Composition']
 }
 
 export interface SocialMediaContent {
@@ -43,6 +48,15 @@ export interface AnalysisResult {
   proactiveSuggestions?: ProactiveSuggestion[];
 }
 
+export interface WatermarkSettings {
+    enabled: boolean;
+    text: string;
+    opacity: number; // 0-100
+    size: number; // 10-100 (percentage of width mostly)
+    position: 'center' | 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'tiled';
+    color: string;
+}
+
 export interface ManualEdits {
   brightness: number;
   contrast: number;
@@ -53,8 +67,9 @@ export interface ManualEdits {
   clarity: number;
   sharpness: number;
   noiseReduction: number;
-  cropRect?: CropCoordinates; // Specific manual crop rectangle
-  aspectRatio?: number; // Center crop fallback
+  cropRect?: CropCoordinates;
+  aspectRatio?: number;
+  watermark?: WatermarkSettings;
 }
 
 export interface CropCoordinates {
@@ -71,7 +86,6 @@ export type EditorAction = {
 
 export type View = 'home' | 'upload' | 'editor' | 'batch' | 'generate' | 'raw-converter';
 
-// --- History ---
 export interface HistoryEntry {
   state: UploadedFile[];
   actionName: string;
@@ -82,9 +96,6 @@ export interface History {
   present: HistoryEntry;
   future: HistoryEntry[];
 }
-
-
-// --- User Profile and Learning ---
 
 export interface Preset {
   id: string;
@@ -108,6 +119,6 @@ export type Feedback = 'good' | 'bad';
 
 export interface UserProfile {
   autopilotTendencies: AutopilotTendencies;
-  feedbackHistory: Record<string, Feedback>; // key: actionId
+  feedbackHistory: Record<string, Feedback>;
   presets: Preset[];
 }

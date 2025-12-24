@@ -18,38 +18,55 @@ const HomeView: React.FC<HomeViewProps> = ({ onEnterApp }) => {
   ];
 
   return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center text-center p-4 relative overflow-hidden bg-slate-950 text-white">
-      {/* Background Glows */}
-      <div className="absolute top-[-20%] left-[-20%] w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse-slow"></div>
-      <div className="absolute bottom-[-20%] right-[-20%] w-96 h-96 bg-fuchsia-500/20 rounded-full blur-3xl animate-pulse-slow animation-delay-2000"></div>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <div className="relative z-10 flex flex-col items-center max-w-5xl w-full">
+        <div className="animate-fade-in-up flex flex-col items-center text-center">
+            <div className="p-4 rounded-3xl bg-slate-800/30 backdrop-blur-xl border border-white/5 mb-8 shadow-2xl">
+              <LogoIcon className="w-20 h-20 text-cyan-400" />
+            </div>
+            
+            <div className="mb-6">
+              <h1 className="text-6xl md:text-8xl font-black tracking-tighter bg-gradient-to-b from-white via-white to-slate-500 bg-clip-text text-transparent aurora-text-glow">
+                Fotograf <span className="bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text">AI</span>
+              </h1>
+            </div>
 
-      <div className="relative z-10 flex flex-col items-center">
-        <div className="animate-fade-in-up">
-            <LogoIcon className="w-24 h-24 text-cyan-400 mx-auto" />
-            <h1 className="mt-6 text-6xl md:text-7xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">
-            {t.home_title}
-            </h1>
-            <p className="mt-4 max-w-2xl text-lg md:text-xl text-slate-400">
-            {t.home_subtitle}
+            <p className="max-w-xl text-lg md:text-xl text-slate-400 leading-relaxed font-medium">
+              {t.home_subtitle}
             </p>
         </div>
 
-        <div className="mt-12 flex flex-wrap justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           {features.map((feature, index) => (
-            <div key={index} className="flex items-center space-x-3 text-slate-300 bg-slate-500/10 px-4 py-2 rounded-full border border-slate-500/20">
-              {feature.icon}
-              <span className="font-medium text-sm">{feature.name}</span>
+            <div key={index} className="glass-card flex flex-col items-center justify-center p-6 rounded-3xl transition-all duration-500 hover:scale-105 hover:bg-white/5 group">
+              <div className="p-3 rounded-2xl bg-cyan-500/10 mb-4 group-hover:bg-cyan-500/20 transition-colors">
+                {feature.icon}
+              </div>
+              <span className="font-bold text-xs uppercase tracking-widest text-slate-400 group-hover:text-white transition-colors">{feature.name}</span>
             </div>
           ))}
         </div>
         
-        <button
-          onClick={onEnterApp}
-          className="mt-12 inline-flex items-center px-12 py-5 border border-transparent text-lg font-semibold rounded-2xl shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-fuchsia-500 transition-all transform hover:-translate-y-1 active:translate-y-0 hover:shadow-2xl hover:shadow-cyan-500/30 aurora-glow animate-fade-in-up"
-          style={{ animationDelay: '400ms' }}
-        >
-          {t.home_enter}
-        </button>
+        <div className="mt-16 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+          <button
+            onClick={onEnterApp}
+            className="shimmer-btn relative group inline-flex items-center px-16 py-6 border border-transparent text-xl font-black rounded-full shadow-2xl text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 transition-all transform hover:-translate-y-2 active:translate-y-0 active:scale-95"
+          >
+            <span className="relative z-10 flex items-center">
+              {t.home_enter}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-3 group-hover:translate-x-2 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </span>
+            <div className="absolute inset-0 rounded-full bg-cyan-500 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+          </button>
+        </div>
+        
+        <div className="mt-20 flex items-center gap-8 opacity-30 grayscale hover:grayscale-0 transition-all duration-1000">
+           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Powered by Gemini 2.5 Pro</span>
+           <div className="w-1 h-1 rounded-full bg-slate-700"></div>
+           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Imagen 4.0 Studio</span>
+        </div>
       </div>
     </div>
   );

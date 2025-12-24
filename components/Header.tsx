@@ -1,15 +1,14 @@
 
 import React from 'react';
-import { KeyIcon, MenuIcon } from './icons';
+import { MenuIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface HeaderProps {
   title: string;
-  onOpenApiKeyModal: () => void;
   onToggleSidebar: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, onOpenApiKeyModal, onToggleSidebar }) => {
+const Header: React.FC<HeaderProps> = ({ title, onToggleSidebar }) => {
   const { language, setLanguage } = useTranslation();
 
   return (
@@ -45,14 +44,6 @@ const Header: React.FC<HeaderProps> = ({ title, onOpenApiKeyModal, onToggleSideb
                 EN
             </button>
         </div>
-
-        <button
-          onClick={onOpenApiKeyModal}
-          className="p-2 rounded-full text-slate-500 hover:text-cyan-500 hover:bg-slate-800 transition-colors"
-          title="API Key"
-        >
-          <KeyIcon className="w-6 h-6" />
-        </button>
       </div>
     </header>
   );

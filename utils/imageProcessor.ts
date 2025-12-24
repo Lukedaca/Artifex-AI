@@ -7,7 +7,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        // result is "data:mime/type;base64,..." - we only want the part after the comma
         const base64 = reader.result.split(',')[1];
         resolve(base64);
       } else {
@@ -29,13 +28,12 @@ export const base64ToFile = async (base64: string, filename: string, mimeType: s
 };
 
 /**
- * Normalizes an image file: ensures it's a JPEG and resizes it only if absolutely necessary
- * to prevent browser crashes, but keeps HIGH resolution (6K+).
+ * Normalizes an image file: ensures it's a JPEG and resizes it only if absolutely necessary.
  */
 export const normalizeImageFile = (
     file: File,
-    maxSize = 6000, // Increased to 6000 to support full resolution of most cameras (24MP)
-    quality = 0.98 // Increased quality to prevent artifacts
+    maxSize = 6000, 
+    quality = 0.98 
 ): Promise<File> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -46,12 +44,8 @@ export const normalizeImageFile = (
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                if (!ctx) {
-                    return reject(new Error('Could not get canvas context'));
-                }
+                if (!ctx) return reject(new Error('Could not get canvas context'));
 
-                // Only resize if image is truly massive (saving memory/token limits)
-                // otherwise keep original as much as possible.
                 if (width > maxSize || height > maxSize) {
                      if (width > height) {
                         height = Math.round((height * maxSize) / width);
@@ -64,11 +58,8 @@ export const normalizeImageFile = (
 
                 canvas.width = width;
                 canvas.height = height;
-                
-                // Use high quality smoothing
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
-                
                 ctx.drawImage(img, 0, 0, width, height);
 
                 canvas.toBlob(
@@ -100,15 +91,47 @@ export const normalizeImageFile = (
     });
 };
 
-import type { ManualEdits } from '../types';
+import type { ManualEdits, WatermarkSettings } from '../types';
 
 /**
- * Applies all manual edits to an image and returns a blob for export.
- * Uses enhanced algorithms for professional results:
- * - Luminance-based Contrast (prevents saturation shifts)
- * - Photographic Exposure (instead of linear brightness)
- * - Luma-weighted Saturation (protects darks/lights)
+ * Calculates histogram data from an image source.
  */
+export const calculateHistogram = (imageUrl: string): Promise<{ r: number[], g: number[], b: number[], l: number[] }> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Resize for faster processing, 500px is enough for histogram
+            const scale = Math.min(1, 500 / Math.max(img.width, img.height));
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return reject();
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            
+            const r = new Array(256).fill(0);
+            const g = new Array(256).fill(0);
+            const b = new Array(256).fill(0);
+            const l = new Array(256).fill(0);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                r[data[i]]++;
+                g[data[i+1]]++;
+                b[data[i+2]]++;
+                // Rec. 709 Luminance
+                const lum = Math.round(0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2]);
+                l[Math.min(255, lum)]++;
+            }
+            resolve({ r, g, b, l });
+        };
+        img.onerror = reject;
+        img.src = imageUrl;
+    });
+};
+
 export const applyEditsAndExport = (
   imageUrl: string,
   edits: ManualEdits,
@@ -130,15 +153,12 @@ export const applyEditsAndExport = (
       let srcW = img.width;
       let srcH = img.height;
 
-      // Priority 1: Manual Rectangle Crop
       if (edits.cropRect) {
           srcX = Math.max(0, edits.cropRect.x);
           srcY = Math.max(0, edits.cropRect.y);
           srcW = Math.min(img.width - srcX, edits.cropRect.width);
           srcH = Math.min(img.height - srcY, edits.cropRect.height);
-      } 
-      // Priority 2: Aspect Ratio Center Crop
-      else if (edits.aspectRatio) {
+      } else if (edits.aspectRatio) {
           const imageRatio = img.width / img.height;
           const targetRatio = edits.aspectRatio;
 
@@ -152,7 +172,6 @@ export const applyEditsAndExport = (
       }
 
       // --- 2. Set Canvas Size ---
-      // Ensure we are exporting at high resolution based on options
       const finalWidth = Math.floor(srcW * options.scale);
       const finalHeight = Math.floor(srcH * options.scale);
       
@@ -164,7 +183,7 @@ export const applyEditsAndExport = (
 
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, finalWidth, finalHeight);
 
-      // Check if any pixel edits are actually required
+      // --- 3. Pixel Manipulation ---
       const hasPixelEdits = 
           edits.brightness !== 0 || edits.contrast !== 0 || 
           edits.saturation !== 0 || edits.vibrance !== 0 || 
@@ -175,7 +194,6 @@ export const applyEditsAndExport = (
           const imageData = ctx.getImageData(0, 0, finalWidth, finalHeight);
           const data = imageData.data;
 
-          // Pre-calculate static values outside loop for performance
           const exposureMultiplier = Math.pow(2, edits.brightness / 100); 
           const contrastFactor = (1.015 * (edits.contrast + 100)) / (100 * (1.015 - edits.contrast / 100));
           const saturationScale = 1 + (edits.saturation / 100);
@@ -188,22 +206,18 @@ export const applyEditsAndExport = (
             let g = data[i + 1];
             let b = data[i + 2];
             
-            // --- 1. Exposure (Brightness) ---
             if (edits.brightness !== 0) {
                 r *= exposureMultiplier;
                 g *= exposureMultiplier;
                 b *= exposureMultiplier;
             }
 
-            // Calculate Luminance (Rec. 709)
             let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-            // --- 2. Contrast (Luminance Only) ---
             if (edits.contrast !== 0) {
                 let newLum = 128 + contrastFactor * (lum - 128);
-                newLum = Math.max(0, Math.min(255, newLum)); // Clamp
-                
-                if (lum > 1) { // Avoid divide by zero
+                newLum = Math.max(0, Math.min(255, newLum));
+                if (lum > 1) {
                     const ratio = newLum / lum;
                     r *= ratio;
                     g *= ratio;
@@ -212,37 +226,28 @@ export const applyEditsAndExport = (
                 }
             }
 
-            // --- 3. Shadows & Highlights (Luminance Masking) ---
             if (edits.shadows !== 0 || edits.highlights !== 0) {
                 const normLum = lum / 255;
-                
                 if (edits.shadows !== 0) {
-                    // Darker areas get more effect
                     const shadowMask = (1.0 - normLum) * (1.0 - normLum);
                     const lift = shadowLift * shadowMask;
                     r += lift; g += lift; b += lift;
                 }
-
                 if (edits.highlights !== 0) {
-                    // Brighter areas get more effect
                     const highlightMask = normLum * normLum;
                     const recovery = highlightRec * highlightMask;
                     r += recovery; g += recovery; b += recovery;
                 }
             }
 
-            // --- 4. Saturation & Vibrance ---
             if (edits.saturation !== 0 || edits.vibrance !== 0) {
-                // Recalc lum for accurate color mixing
                 lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                
                 let max = Math.max(r, g, b);
                 let min = Math.min(r, g, b);
                 let delta = max - min;
                 let currentSat = (max === 0) ? 0 : delta / max;
 
                 let totalSatMult = saturationScale;
-
                 if (edits.vibrance !== 0) {
                     const vibFactor = (1 - currentSat); 
                     totalSatMult += ((vibranceScale - 1) * vibFactor);
@@ -253,7 +258,6 @@ export const applyEditsAndExport = (
                 b = lum + (b - lum) * totalSatMult;
             }
 
-            // Final Clamp
             data[i] = Math.max(0, Math.min(255, r));
             data[i + 1] = Math.max(0, Math.min(255, g));
             data[i + 2] = Math.max(0, Math.min(255, b));
@@ -261,15 +265,12 @@ export const applyEditsAndExport = (
 
           ctx.putImageData(imageData, 0, 0);
 
-          // --- 5. Sharpness / Clarity / Noise ---
-          // Using integer math where possible to avoid floating point errors causing black screen
           if (edits.noiseReduction > 0 || edits.sharpness > 0 || edits.clarity > 0) {
                const tempCanvas = document.createElement('canvas');
                tempCanvas.width = finalWidth;
                tempCanvas.height = finalHeight;
                const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
                
-               // Noise Reduction
                if (edits.noiseReduction > 0) {
                    tempCtx.drawImage(canvas, 0, 0);
                    ctx.filter = `blur(${edits.noiseReduction / 40}px)`; 
@@ -277,7 +278,6 @@ export const applyEditsAndExport = (
                    ctx.filter = 'none';
                }
 
-               // Sharpness / Clarity
                if (edits.sharpness > 0 || edits.clarity > 0) {
                     const sharpData = ctx.getImageData(0, 0, finalWidth, finalHeight);
                     const pixels = sharpData.data;
@@ -287,30 +287,21 @@ export const applyEditsAndExport = (
                     const clarityAmount = edits.clarity / 80;
                     const threshold = 10; 
 
-                    // Skip edges
                     for (let y = 1; y < finalHeight - 1; y++) {
                         for (let x = 1; x < finalWidth - 1; x++) {
                             const idx = (y * finalWidth + x) * 4;
-                            
                             for (let c = 0; c < 3; c++) {
                                 const val = sourceData[idx + c];
-                                
-                                // Neighbor indices
                                 const up = sourceData[((y - 1) * finalWidth + x) * 4 + c];
                                 const down = sourceData[((y + 1) * finalWidth + x) * 4 + c];
                                 const left = sourceData[(y * finalWidth + (x - 1)) * 4 + c];
                                 const right = sourceData[(y * finalWidth + (x + 1)) * 4 + c];
-
-                                // Simple Laplacian Filter
                                 const laplacian = (4 * val) - (up + down + left + right);
 
                                 if (Math.abs(laplacian) > threshold) {
                                     let newVal = val;
-                                    // Add sharpness (high freq)
                                     newVal += (laplacian * sharpAmount);
-                                    // Add clarity (mid freq boost simulation)
                                     newVal += (laplacian * clarityAmount * 0.6);
-                                    
                                     pixels[idx + c] = Math.max(0, Math.min(255, newVal));
                                 }
                             }
@@ -321,9 +312,60 @@ export const applyEditsAndExport = (
           }
       }
 
+      // --- 4. Watermark ---
+      if (edits.watermark && edits.watermark.enabled && edits.watermark.text) {
+          const wm = edits.watermark;
+          const fontSize = Math.floor(finalWidth * (wm.size / 300)); // Scale relative to width
+          ctx.font = `bold ${fontSize}px sans-serif`;
+          ctx.globalAlpha = wm.opacity / 100;
+          ctx.fillStyle = wm.color;
+          
+          const textMetrics = ctx.measureText(wm.text);
+          const textWidth = textMetrics.width;
+          const padding = fontSize / 2;
+          
+          let x = 0, y = 0;
+
+          if (wm.position === 'tiled') {
+             ctx.rotate(-45 * Math.PI / 180);
+             const diag = Math.sqrt(finalWidth*finalWidth + finalHeight*finalHeight);
+             for(let i=-diag; i<diag; i+= textWidth + padding*4) {
+                 for(let j=-diag; j<diag; j+= fontSize*3) {
+                     ctx.fillText(wm.text, i, j);
+                 }
+             }
+             ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+          } else {
+              // Basic positions
+              switch (wm.position) {
+                  case 'center':
+                      x = (finalWidth - textWidth) / 2;
+                      y = finalHeight / 2;
+                      break;
+                  case 'top-left':
+                      x = padding;
+                      y = padding + fontSize;
+                      break;
+                  case 'top-right':
+                      x = finalWidth - textWidth - padding;
+                      y = padding + fontSize;
+                      break;
+                  case 'bottom-left':
+                      x = padding;
+                      y = finalHeight - padding;
+                      break;
+                  case 'bottom-right':
+                      x = finalWidth - textWidth - padding;
+                      y = finalHeight - padding;
+                      break;
+              }
+              ctx.fillText(wm.text, x, y);
+          }
+          ctx.globalAlpha = 1.0;
+      }
+
       // Export
       const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
-      // Ensure quality is never below 0.1 or above 1
       const quality = options.format === 'jpeg' ? Math.max(0.1, Math.min(1, options.quality / 100)) : undefined;
       
       canvas.toBlob((blob) => {

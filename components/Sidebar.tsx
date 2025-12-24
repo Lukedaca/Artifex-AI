@@ -20,6 +20,7 @@ import {
   PresetIcon,
   SparklesIcon,
   FilmIcon,
+  YoutubeIcon,
 } from './icons';
 
 interface SidebarProps {
@@ -69,6 +70,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
 
   const aiTools: {icon: React.ReactNode, label: string, view: View, action?: string}[] = [
     { icon: <AutopilotIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_autopilot, view: "editor", action: "autopilot" },
+    { icon: <YoutubeIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_youtube, view: "editor", action: "youtube-thumbnail" },
     { icon: <SparklesIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_social, view: "editor", action: "social-media" },
     { icon: <FilmIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_video, view: "editor", action: "video-generation" },
     { icon: <EraserIcon className="w-5 h-5 flex-shrink-0"/>, label: t.nav_remove_obj, view: "editor", action: "remove-object" },
@@ -94,8 +96,8 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
             <LogoIcon className="w-8 h-8 text-cyan-400 flex-shrink-0" />
             {!isCollapsed && (
               <div className="flex-grow overflow-hidden">
-                <h1 className="text-xl font-extrabold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">Artifex AI</h1>
-                <p className="text-xs text-slate-400 -mt-0.5">v3.2</p>
+                <h1 className="text-xl font-extrabold bg-gradient-to-r from-cyan-400 via-indigo-400 to-fuchsia-500 bg-clip-text text-transparent aurora-text-glow">Fotograf AI</h1>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Studio</p>
               </div>
             )}
             <button onClick={onToggleCollapse} className="hidden lg:flex items-center justify-center absolute top-1/2 -translate-y-1/2 -right-3.5 z-10 w-7 h-7 bg-slate-800 rounded-full shadow-lg border border-slate-700 text-slate-500 hover:text-cyan-500 transition-all duration-300 hover:scale-110 active:scale-100">
@@ -129,7 +131,7 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
               </div>
             </div>
             <div>
-              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">AI Tools</h2>}
+              {!isCollapsed && <h2 className="px-4 mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">AI Power</h2>}
               {isCollapsed && <hr className="my-4 border-slate-700/80" />}
               <div className="space-y-1.5 relative">
                 {aiTools.map((item) => {
@@ -143,8 +145,8 @@ const Sidebar = ({ isOpen, isCollapsed, onClose, onNavigate, onToggleCollapse, c
           </nav>
 
           {!isCollapsed && (
-            <div className="mt-auto pt-4 p-4 text-center text-xs text-slate-500 flex-shrink-0">
-              © 2025 Artifex AI
+            <div className="mt-auto pt-4 p-4 text-center text-[10px] text-slate-500 font-mono flex-shrink-0">
+              Fotograf AI © 2025 v3.5
             </div>
           )}
         </div>

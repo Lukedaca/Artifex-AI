@@ -1,7 +1,7 @@
 
-import React from 'react';
-import type { ManualEdits } from '../types';
-import { AutoCropIcon, ExportIcon } from './icons';
+import React, { useState } from 'react';
+import type { ManualEdits, WatermarkSettings } from '../types';
+import { AutoCropIcon, ExportIcon, WatermarkIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface SliderProps {
@@ -57,10 +57,17 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
     onSnapshot
 }) => {
   const { t } = useTranslation();
+  const [showWatermark, setShowWatermark] = useState(false);
 
   // Wrapper to handle edit change but NOT trigger snapshot yet
   const handleChange = <K extends keyof ManualEdits>(key: K, value: ManualEdits[K]) => {
       onEditChange(key, value);
+  };
+
+  const updateWatermark = (updates: Partial<WatermarkSettings>) => {
+      const current = edits.watermark || { enabled: false, text: '', opacity: 50, size: 20, position: 'bottom-right', color: '#ffffff' };
+      handleChange('watermark', { ...current, ...updates });
+      onSnapshot();
   };
 
   const ASPECT_RATIOS = [
@@ -121,6 +128,59 @@ const ManualEditControls: React.FC<ManualEditControlsProps> = ({
       <Slider label={t.manual_clarity} value={edits.clarity} min={0} onChange={(v) => handleChange('clarity', v)} onAfterChange={onSnapshot} />
       <Slider label={t.manual_sharpness} value={edits.sharpness} min={0} onChange={(v) => handleChange('sharpness', v)} onAfterChange={onSnapshot} />
       <Slider label={t.manual_noise} value={edits.noiseReduction} min={0} onChange={(v) => handleChange('noiseReduction', v)} onAfterChange={onSnapshot} />
+
+      {/* Watermark Section */}
+      <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+          <button onClick={() => setShowWatermark(!showWatermark)} className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+                <WatermarkIcon className="w-4 h-4 text-cyan-400" />
+                <label className="text-sm font-medium text-slate-300">Inteligentní Vodoznak</label>
+            </div>
+            <span className="text-xs text-slate-500">{showWatermark ? '▼' : '▶'}</span>
+          </button>
+          
+          {showWatermark && (
+              <div className="space-y-3 pt-2 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                     <span className="text-xs text-slate-400">Aktivovat</span>
+                     <input type="checkbox" checked={edits.watermark?.enabled || false} onChange={(e) => updateWatermark({ enabled: e.target.checked })} />
+                  </div>
+                  {edits.watermark?.enabled && (
+                      <>
+                        <input 
+                            type="text" 
+                            value={edits.watermark?.text || ''} 
+                            onChange={(e) => updateWatermark({ text: e.target.value })}
+                            placeholder="© Váš text"
+                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                             <input 
+                                type="color" 
+                                value={edits.watermark?.color || '#ffffff'}
+                                onChange={(e) => updateWatermark({ color: e.target.value })}
+                                className="w-full h-8 bg-transparent cursor-pointer"
+                             />
+                             <select 
+                                value={edits.watermark?.position || 'bottom-right'}
+                                onChange={(e) => updateWatermark({ position: e.target.value as any })}
+                                className="bg-slate-900 border border-slate-700 rounded text-xs text-white"
+                             >
+                                 <option value="bottom-right">Vpravo dole</option>
+                                 <option value="bottom-left">Vlevo dole</option>
+                                 <option value="center">Střed</option>
+                                 <option value="tiled">Opakovat (Tiled)</option>
+                             </select>
+                        </div>
+                        <div className="space-y-1">
+                             <label className="text-[10px] text-slate-500">Průhlednost</label>
+                             <input type="range" min="10" max="100" value={edits.watermark?.opacity || 50} onChange={(e) => updateWatermark({ opacity: Number(e.target.value) })} className="custom-slider h-1" />
+                        </div>
+                      </>
+                  )}
+              </div>
+          )}
+      </div>
 
       <hr className="border-slate-700/50 my-4" />
 

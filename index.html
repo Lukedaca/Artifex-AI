@@ -1,180 +1,112 @@
+
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+
 <!DOCTYPE html>
 <html lang="cs">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Artifex AI v3.1</title>
+  <title>Fotograf AI | Profesionální AI Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?v=3.1"></script>
   <style>
+    :root {
+      --bg-deep: #020617;
+      --accent-cyan: #22d3ee;
+      --accent-fuchsia: #d946ef;
+    }
     body {
       margin: 0;
       font-family: 'Inter', sans-serif;
-      /* Background is now controlled by the App component for consistency */
+      background-color: var(--bg-deep);
+      color: white;
+      overflow-x: hidden;
     }
-    .noise-bg {
-      position: relative;
-    }
-    .noise-bg::before {
-      content: "";
-      position: absolute;
+    
+    /* Wow Animated Mesh Background */
+    .mesh-gradient {
+      position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-      opacity: 0.03;
       z-index: -1;
+      background: var(--bg-deep);
+      overflow: hidden;
+    }
+    .mesh-ball {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      animation: move 25s infinite alternate;
+    }
+    @keyframes move {
+      from { transform: translate(-20%, -20%) rotate(0deg); }
+      to { transform: translate(40%, 40%) rotate(360deg); }
     }
 
-    /* Aurora Glow Effects */
-    .aurora-glow {
-      --glow-color-1: #22d3ee; /* cyan-400 */
-      --glow-color-2: #d946ef; /* fuchsia-500 */
-      box-shadow: 0 0 15px -2px color-mix(in srgb, var(--glow-color-1) 50%, transparent),
-                  0 0 15px -2px color-mix(in srgb, var(--glow-color-2) 50%, transparent);
-      transition: box-shadow 0.3s ease-in-out;
-    }
-    .aurora-glow-strong {
-      --glow-color-1: #22d3ee;
-      --glow-color-2: #d946ef;
-      box-shadow: 0 0 30px -5px color-mix(in srgb, var(--glow-color-1) 70%, transparent),
-                  0 0 30px -5px color-mix(in srgb, var(--glow-color-2) 70%, transparent);
-    }
     .aurora-text-glow {
-        text-shadow: 0 0 8px color-mix(in srgb, #22d3ee 50%, transparent), 
-                     0 0 12px color-mix(in srgb, #d946ef 30%, transparent);
-    }
-
-    /* Marching Ants Animation for Upload */
-    @keyframes marching-ants {
-        to {
-            stroke-dashoffset: -20;
-        }
-    }
-    .marching-ants {
-        animation: marching-ants 1s linear infinite;
+        display: inline-block;
+        padding: 0.2em 0; /* Prevents clipping */
+        line-height: 1.1;
+        text-shadow: 0 0 30px rgba(34, 139, 230, 0.3);
     }
     
-    /* Custom Slider Styles */
-    .custom-slider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 6px;
-      background: rgba(100, 116, 139, 0.3); /* slate-500/30 */
-      border-radius: 9999px;
-      outline: none;
-      transition: opacity .2s;
-    }
-    .custom-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 20px;
-      height: 20px;
-      background: #1e293b; /* slate-800 */
-      border: 2px solid #a855f7; /* fuchsia-500 */
-      border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #a855f7;
-    }
-    .custom-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.1);
-    }
-     .custom-slider::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      background: #1e293b; /* slate-800 */
-      border: 2px solid #a855f7; /* fuchsia-500 */
-      border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 0 10px -2px #a855f7;
+    .glass-card {
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
 
-    /* Editor View Grid Pattern */
-    .bg-grid-pattern {
-        background-image: 
-            linear-gradient(rgba(71, 85, 105, 0.5) 1px, transparent 1px),
-            linear-gradient(to right, rgba(71, 85, 105, 0.5) 1px, transparent 1px);
-        background-size: 2rem 2rem;
+    .shimmer-btn {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer-btn::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(
+        45deg,
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent
+      );
+      transform: rotate(45deg);
+      animation: shimmer 4s infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) rotate(45deg); }
     }
 
-    /* Animation for Notifications */
-    @keyframes fade-in-right {
-      from {
-        opacity: 0;
-        transform: translateX(24px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-    .animate-fade-in-right {
-      animation: fade-in-right 0.3s ease-out forwards;
-    }
-
-    /* Animation for HomeView */
-    @keyframes fade-in-up {
-      from {
-        opacity: 0;
-        transform: translateY(24px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    .animate-fade-in-up {
-      animation: fade-in-up 0.6s ease-out forwards;
-    }
-    
-    /* Animation for Editor Panel Content */
-    @keyframes fade-in-slide-up {
-      from {
-        opacity: 0;
-        transform: translateY(16px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    .animate-fade-in-slide-up {
-      animation: fade-in-slide-up 0.4s ease-out forwards;
-    }
-
-    .animate-pulse-slow {
-        animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    @keyframes pulse {
-        50% {
-            opacity: .5;
-        }
-    }
-    .animation-delay-2000 {
-        animation-delay: 2s;
-    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
   </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^18.2.0/client",
-    "react": "https://aistudiocdn.com/react@^18.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^18.2.0/",
-    "react/": "https://aistudiocdn.com/react@^18.2.0/"
-  }
-}
-</script>
 </head>
 <body class="noise-bg">
+  <div class="mesh-gradient">
+    <div class="mesh-ball w-[600px] h-[600px] bg-cyan-500 top-[-10%] left-[-10%]"></div>
+    <div class="mesh-ball w-[500px] h-[500px] bg-fuchsia-600 bottom-[-10%] right-[-10%] animation-delay-2000" style="animation-duration: 35s"></div>
+    <div class="mesh-ball w-[400px] h-[400px] bg-indigo-500 top-[30%] left-[40%] opacity-10" style="animation-duration: 40s"></div>
+  </div>
   <div id="root"></div>
 </body>
 </html>
