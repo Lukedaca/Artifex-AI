@@ -121,4 +121,7 @@ export interface UserProfile {
   autopilotTendencies: AutopilotTendencies;
   feedbackHistory: Record<string, Feedback>;
   presets: Preset[];
+  credits: number;
+  hasSeenOnboarding: boolean;
+  isAdmin: boolean;
 }

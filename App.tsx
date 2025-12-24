@@ -11,6 +11,8 @@ import RAWConverterView from './components/RAWConverterView';
 
 // Components
 import Sidebar from './components/Sidebar';
+import OnboardingModal from './components/OnboardingModal';
+import CreditPurchaseModal from './components/CreditPurchaseModal';
 import { XCircleIcon } from './components/icons';
 
 // Types
@@ -19,7 +21,7 @@ import type { UploadedFile, View, EditorAction, History, HistoryEntry, Preset } 
 // Utils & Services
 import { clearLegacyKeys } from './utils/apiKey';
 import { normalizeImageFile } from './utils/imageProcessor';
-import { getPresets } from './services/userProfileService';
+import { getPresets, getUserProfile, updateCredits, markOnboardingSeen } from './services/userProfileService';
 import { useTranslation } from './contexts/LanguageContext';
 
 
@@ -85,6 +87,12 @@ function App() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [userPresets, setUserPresets] = useState<Preset[]>([]);
+  
+  // Market Logic
+  const [credits, setCredits] = useState(50);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
 
   // --- Effects ---
@@ -94,9 +102,21 @@ function App() {
     clearLegacyKeys();
   }, []);
 
-  // Load presets
+  // Load User Data & Check Admin
   useEffect(() => {
-      setUserPresets(getPresets());
+      const profile = getUserProfile();
+      setUserPresets(profile.presets);
+      setCredits(profile.credits);
+      setIsAdmin(profile.isAdmin);
+
+      if (!profile.hasSeenOnboarding) {
+          setShowOnboarding(true);
+      }
+      
+      // Notify if Admin mode is active
+      if (profile.isAdmin) {
+         setTimeout(() => addNotification("Admin Mode Activated: Unlimited Credits & Master Key Access", "info"), 1000);
+      }
   }, []);
 
   // Set permanent dark theme on mount
@@ -105,6 +125,33 @@ function App() {
   }, []);
 
   // --- Handlers ---
+
+  const handleDeductCredits = (amount: number): boolean => {
+      // ADMIN BYPASS: Admin never uses credits
+      if (isAdmin) return true;
+
+      if (credits >= amount) {
+          const newTotal = updateCredits(-amount);
+          setCredits(newTotal);
+          return true;
+      }
+      // If not enough credits, show purchase modal
+      setShowPurchaseModal(true);
+      return false;
+  };
+
+  const handlePurchaseCredits = (amount: number) => {
+      // Mock purchase
+      const newTotal = updateCredits(amount);
+      setCredits(newTotal);
+      setShowPurchaseModal(false);
+      addNotification(`${t.store_success} +${amount} credits`, 'info');
+  };
+  
+  const handleOnboardingComplete = () => {
+      setShowOnboarding(false);
+      markOnboardingSeen();
+  };
 
   const setFiles = useCallback((newState: UploadedFile[] | ((prevState: UploadedFile[]) => UploadedFile[]), actionName: string) => {
     const newFiles = typeof newState === 'function' ? newState(files) : newState;
@@ -217,6 +264,9 @@ function App() {
     const headerProps = {
         title: getPageTitle(),
         onToggleSidebar: handleToggleSidebar,
+        credits: isAdmin ? 9999 : credits, // Visually show unlimited for Admin
+        onBuyCredits: () => setShowPurchaseModal(true),
+        onOpenApiKeyModal: () => {} // Deprecated functionality in this mode
     };
 
     switch (view) {
@@ -225,11 +275,11 @@ function App() {
       case 'upload':
         return <UploadView {...headerProps} onFilesSelected={handleFilesSelected} addNotification={addNotification} />;
       case 'editor':
-        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} onOpenApiKeyModal={() => {}} />;
+        return <EditorView {...headerProps} files={files} activeFileId={activeFileId} onSetFiles={setFiles} onSetActiveFileId={setActiveFileId} activeAction={activeAction} addNotification={addNotification} userPresets={userPresets} onPresetsChange={setUserPresets} history={history} onUndo={() => dispatchHistory({type: 'UNDO'})} onRedo={() => dispatchHistory({type: 'REDO'})} onNavigate={handleNavigate} onOpenApiKeyModal={() => {}} credits={credits} onDeductCredits={handleDeductCredits} />;
       case 'batch':
         return <BatchView {...headerProps} files={files} onBatchComplete={handleBatchComplete} addNotification={addNotification} onSetFiles={setFiles} />;
       case 'generate':
-        return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} onOpenApiKeyModal={() => {}} />;
+        return <GenerateImageView {...headerProps} onImageGenerated={handleImageGenerated} onOpenApiKeyModal={() => {}} credits={credits} onDeductCredits={handleDeductCredits} />;
       case 'raw-converter':
         return <RAWConverterView {...headerProps} addNotification={addNotification} onFilesConverted={handleRawFilesConverted} />;
       default:
@@ -255,6 +305,14 @@ function App() {
         <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? 'lg:pl-24' : 'lg:pl-64'}`}>
             {renderView()}
         </main>
+        
+        {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
+        
+        <CreditPurchaseModal 
+            isOpen={showPurchaseModal} 
+            onClose={() => setShowPurchaseModal(false)}
+            onPurchase={handlePurchaseCredits}
+        />
         
         <div className="fixed top-5 right-5 z-[100] w-full max-w-sm space-y-3">
             {notifications.map(n => (

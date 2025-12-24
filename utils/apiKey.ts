@@ -9,41 +9,10 @@ declare global {
   }
 }
 
-const LOCAL_STORAGE_KEY = 'gemini_api_key';
+// We no longer store user keys in local storage for this version of the app.
+// Access is controlled via Credits on the server/app side (simulated).
 
-/**
- * Checks if an API key is available via environment or bridge.
- * No longer uses localStorage for security reasons.
- */
-export const hasSelectedApiKey = async (): Promise<boolean> => {
-  // 1. Primary: Check standard Environment Variable (Injected by host)
-  if (process.env.API_KEY && process.env.API_KEY.length > 0) {
-    return true;
-  }
-
-  // 2. Secondary: Check AI Studio Host bridge
-  if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-    return await window.aistudio.hasSelectedApiKey();
-  }
-  
-  return false;
-};
-
-/**
- * Cleanup function to remove any legacy keys from storage.
- */
 export const clearLegacyKeys = () => {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
-    localStorage.removeItem('artifex_api_key'); // Legacy fallback
-};
-
-/**
- * Opens the AI Studio dialog if available.
- */
-export const openSelectKey = async (): Promise<boolean> => {
-  if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-    await window.aistudio.openSelectKey();
-    return true;
-  }
-  return false;
+    localStorage.removeItem('gemini_api_key');
+    localStorage.removeItem('artifex_user_api_key'); 
 };

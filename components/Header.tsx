@@ -1,15 +1,17 @@
 
 import React from 'react';
-import { MenuIcon } from './icons';
+import { MenuIcon, SparklesIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface HeaderProps {
   title: string;
   onToggleSidebar: () => void;
+  credits?: number;
+  onBuyCredits?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, onToggleSidebar }) => {
-  const { language, setLanguage } = useTranslation();
+const Header: React.FC<HeaderProps> = ({ title, onToggleSidebar, credits, onBuyCredits }) => {
+  const { language, setLanguage, t } = useTranslation();
 
   return (
     <header className="flex-shrink-0 flex items-center h-20 px-4 sm:px-8 border-b border-slate-800/50 w-full backdrop-blur-xl">
@@ -29,6 +31,20 @@ const Header: React.FC<HeaderProps> = ({ title, onToggleSidebar }) => {
 
       {/* Right side actions */}
       <div className="flex items-center space-x-3 sm:space-x-4">
+        
+        {/* Credits Display */}
+        {credits !== undefined && (
+            <button 
+                onClick={onBuyCredits}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 rounded-full border border-slate-700/50 hover:bg-slate-700 hover:border-amber-400/50 transition-all cursor-pointer group" 
+                title={t.credits_buy}
+            >
+                <SparklesIcon className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold text-slate-200">{credits}</span>
+                <span className="ml-1 text-[10px] text-cyan-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+            </button>
+        )}
+
         {/* Language Toggle */}
         <div className="flex bg-slate-800/80 rounded-lg p-1 border border-slate-700/50">
             <button 

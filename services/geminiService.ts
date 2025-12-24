@@ -1,23 +1,34 @@
 
-import { GoogleGenAI, Type, Modality } from '@google/genai';
-import type { AnalysisResult, Language, SocialMediaContent, QualityAssessment } from '../types';
+import { GoogleGenAI } from '@google/genai';
+import type { AnalysisResult, Language, QualityAssessment } from '../types';
 import { fileToBase64, base64ToFile } from '../utils/imageProcessor';
 
 /**
- * Initializes and returns a GoogleGenAI instance using the API key exclusively from environment variables.
+ * Initializes and returns a GoogleGenAI instance.
+ * 
+ * SECURITY NOTE:
+ * In this implementation, we are using a single API key (process.env.API_KEY) for the entire app.
+ * Access control is handled by the "Credit System" in the UI layer (App.tsx).
+ * 
+ * If the user has 0 credits, the UI blocks the call to these functions, ensuring
+ * the API is not called unnecessarily.
+ * 
+ * For maximum security, this logic should eventually move to a backend proxy
+ * where the key is never exposed to the client bundle.
  */
 const getGenAI = () => {
     const apiKey = process.env.API_KEY;
+    
     if (!apiKey) {
-        throw new Error("Security Alert: API Key is not configured in the environment.");
+        console.error("API Key is missing in environment variables.");
+        throw new Error("API_KEY_MISSING");
     }
+
     return new GoogleGenAI({ apiKey });
 };
 
 /**
  * STANDALONE YouTube Thumbnail generator.
- * Does not require an input image.
- * Uses Gemini 3 Pro Image for high resolution and viral composition.
  */
 export const generateYouTubeThumbnail = async (
     topic: string, 

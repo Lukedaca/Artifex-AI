@@ -42,6 +42,8 @@ interface EditorViewProps {
   onNavigate: (payload: { view: View; action?: string }) => void;
   onOpenApiKeyModal: () => void;
   onToggleSidebar: () => void;
+  credits: number;
+  onDeductCredits: (amount: number) => boolean;
 }
 
 const getApiErrorMessage = (error: unknown, defaultMessage = 'An error occurred.'): string => {
@@ -65,7 +67,7 @@ const INITIAL_EDITS: ManualEdits = {
 };
 
 const EditorView: React.FC<EditorViewProps> = (props) => {
-  const { files, activeFileId, onSetFiles, onSetActiveFileId, activeAction, addNotification, language } = props;
+  const { files, activeFileId, onSetFiles, onSetActiveFileId, activeAction, addNotification, language, credits, onDeductCredits } = props;
   const { t: trans } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -178,6 +180,13 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
         addNotification(trans.tool_youtube_topic_ph, 'error');
         return;
     }
+
+    const COST = 10;
+    if (!onDeductCredits(COST)) {
+        addNotification(`${trans.credits_low}. ${trans.credits_cost}: ${COST}`, 'error');
+        return;
+    }
+
     // ... (Keep existing key check)
     if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
@@ -219,7 +228,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
   if (!activeFile && !isYouTubeMode) {
     return (
       <div className="flex-1 flex flex-col h-full bg-slate-950">
-         <Header title={trans.app_title} onToggleSidebar={props.onToggleSidebar} />
+         <Header title={trans.app_title} onToggleSidebar={props.onToggleSidebar} credits={credits} />
          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8 text-center">
             <div className="p-6 bg-slate-900 rounded-3xl mb-6 border border-slate-800">
                 <UploadIcon className="w-16 h-16 opacity-30" />
@@ -232,7 +241,7 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
-        <Header title={isYouTubeMode ? "YouTube Thumbnail Studio" : trans.nav_studio} onToggleSidebar={props.onToggleSidebar} />
+        <Header title={isYouTubeMode ? "YouTube Thumbnail Studio" : trans.nav_studio} onToggleSidebar={props.onToggleSidebar} credits={credits} />
         
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
             {/* Viewport */}
@@ -325,6 +334,10 @@ const EditorView: React.FC<EditorViewProps> = (props) => {
                                     className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-white focus:ring-2 focus:ring-red-600 outline-none transition-all placeholder:text-slate-700 shadow-inner"
                                 />
                             </div>
+                             <div className="flex items-center justify-between text-xs text-slate-400">
+                                <span>{trans.credits_cost}:</span>
+                                <span className="font-bold text-amber-400">10 {trans.credits_remaining}</span>
+                             </div>
                              <button 
                                 onClick={handleGenerateThumbnail} 
                                 disabled={isLoading}

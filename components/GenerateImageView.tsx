@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { generateImage } from '../services/geminiService';
 import { base64ToFile } from '../utils/imageProcessor';
-import { GenerateImageIcon, UploadIcon, XIcon } from './icons';
+import { GenerateImageIcon, UploadIcon, XIcon, SparklesIcon } from './icons';
 import Header from './Header';
 import { useTranslation } from '../contexts/LanguageContext';
 
@@ -21,10 +21,12 @@ interface GenerateImageViewProps {
     onOpenApiKeyModal: () => void;
     onToggleSidebar: () => void;
     onImageGenerated: (file: File) => void;
+    credits: number;
+    onDeductCredits: (amount: number) => boolean;
 }
 
 const GenerateImageView: React.FC<GenerateImageViewProps> = ({ 
-    title, onOpenApiKeyModal, onToggleSidebar, onImageGenerated 
+    title, onOpenApiKeyModal, onToggleSidebar, onImageGenerated, credits, onDeductCredits 
 }) => {
     const { t } = useTranslation();
     const [prompt, setPrompt] = useState('');
@@ -51,6 +53,13 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
+
+        const COST = 5;
+        if (!onDeductCredits(COST)) {
+             setError(`${t.credits_low}. ${t.credits_cost}: ${COST}`);
+             return;
+        }
+
         setIsLoading(true);
         setError(null);
         setGeneratedImage(null);
@@ -77,7 +86,7 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
     return (
         <>
             <div className="h-full w-full flex flex-col">
-                <Header title={title} onOpenApiKeyModal={onOpenApiKeyModal} onToggleSidebar={onToggleSidebar}/>
+                <Header title={title} onOpenApiKeyModal={onOpenApiKeyModal} onToggleSidebar={onToggleSidebar} credits={credits}/>
                 <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
                     <div className="w-full max-w-5xl">
                         <div className="text-center mb-10">
@@ -101,10 +110,16 @@ const GenerateImageView: React.FC<GenerateImageViewProps> = ({
                                         placeholder={t.gen_placeholder}
                                         className="block w-full border-slate-700 bg-slate-800/80 rounded-md shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm text-base p-3 transition-shadow"
                                     />
+                                    
+                                    <div className="flex items-center justify-between mt-4 mb-2 text-xs text-slate-400">
+                                        <span>{t.credits_cost}:</span>
+                                        <span className="font-bold text-amber-400 flex items-center gap-1">5 <SparklesIcon className="w-3 h-3"/></span>
+                                     </div>
+
                                     <button
                                         onClick={handleGenerate}
                                         disabled={isLoading || !prompt.trim()}
-                                        className="mt-6 w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5 active:translate-y-0 aurora-glow"
+                                        className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-semibold rounded-lg shadow-lg text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-600 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5 active:translate-y-0 aurora-glow"
                                     >
                                         <GenerateImageIcon className="-ml-1 mr-3 h-5 w-5" />
                                         {isLoading ? t.gen_generating : t.gen_btn}
